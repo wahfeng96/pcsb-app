@@ -8,8 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { Plus, Search, Phone, Mail } from 'lucide-react'
+import { Plus, Search, Phone, Mail, X } from 'lucide-react'
 import { STAGE_CONFIG } from '@/types/database'
 import type { Client, ClientStage } from '@/types/database'
 import Link from 'next/link'
@@ -56,12 +55,13 @@ export default function ClientsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
-        <Dialog open={showAdd} onOpenChange={setShowAdd}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="bg-red-600 hover:bg-red-700"><Plus className="h-4 w-4 mr-1" /> Add</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Add Client</DialogTitle></DialogHeader>
+        <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => setShowAdd(!showAdd)}>{showAdd ? <><X className="h-4 w-4 mr-1" /> Cancel</> : <><Plus className="h-4 w-4 mr-1" /> Add</>}</Button>
+      </div>
+
+      {showAdd && (
+        <Card>
+          <CardContent className="p-4">
+            <h3 className="font-semibold mb-3">Add New Client</h3>
             <form onSubmit={handleAdd} className="space-y-3">
               <div><Label>Company Name *</Label><Input value={form.company_name} onChange={e => setForm(f => ({ ...f, company_name: e.target.value }))} required /></div>
               <div><Label>Contact Person *</Label><Input value={form.contact_person} onChange={e => setForm(f => ({ ...f, contact_person: e.target.value }))} required /></div>
@@ -78,9 +78,9 @@ export default function ClientsPage() {
               <div><Label>Notes</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
               <Button type="submit" className="w-full bg-red-600 hover:bg-red-700">Add Client</Button>
             </form>
-          </DialogContent>
-        </Dialog>
-      </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Search & filter */}
       <div className="flex gap-2">
