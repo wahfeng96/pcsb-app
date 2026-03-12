@@ -106,13 +106,16 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Billboard Occupancy */}
+      {/* Billboard Occupancy & Revenue */}
       <div>
-        <h2 className="text-lg font-semibold mb-3">Billboard Occupancy</h2>
+        <h2 className="text-lg font-semibold mb-3">Billboard Overview</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {billboards.map(bb => {
             const occ = getOccupancy(bb.id)
             const pct = (occ / bb.max_slots) * 100
+            const bbBookings = bookings.filter(b => b.billboard_id === bb.id && b.status !== 'cancelled')
+            const settled = bbBookings.filter(b => b.payment_status === 'settled').reduce((s, b) => s + (b.total_amount || 0), 0)
+            const total = bbBookings.reduce((s, b) => s + (b.total_amount || 0), 0)
             return (
               <Card key={bb.id}>
                 <CardContent className="p-4">
@@ -123,11 +126,18 @@ export default function DashboardPage() {
                     </div>
                     <span className="text-sm font-bold">{occ}/{bb.max_slots}</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-red-600 h-2 rounded-full transition-all"
-                      style={{ width: `${pct}%` }}
-                    />
+                  <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+                    <div className="bg-red-600 h-2 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className="flex rounded-lg overflow-hidden border text-center text-xs">
+                    <div className="flex-1 bg-green-50 p-1.5 border-r">
+                      <p className="text-[10px] text-green-700">Settled</p>
+                      <p className="font-bold text-green-700">RM {settled.toLocaleString()}</p>
+                    </div>
+                    <div className="flex-1 bg-red-50 p-1.5">
+                      <p className="text-[10px] text-red-700">Total</p>
+                      <p className="font-bold text-red-700">RM {total.toLocaleString()}</p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

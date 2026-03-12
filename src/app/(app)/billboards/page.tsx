@@ -29,7 +29,7 @@ function getMonthlyRevenue(booking: Booking): { month: Date; amount: number }[] 
   const start = parseISO(booking.start_date)
   const end = parseISO(booking.end_date)
   const months = getMonthsBetween(start, end)
-  const monthlyAmount = months.length > 0 ? (booking.total_amount || 0) / months.length : 0
+  const monthlyAmount = booking.monthly_rate || (months.length > 0 ? (booking.total_amount || 0) / months.length : 0)
   return months.map(m => ({ month: m, amount: monthlyAmount }))
 }
 
