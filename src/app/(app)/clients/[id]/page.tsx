@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { ArrowLeft, Edit2, Plus, Trash2, Phone, Mail, MapPin, X } from 'lucide-react'
-import { format, parseISO } from 'date-fns'
+import { format, parseISO, differenceInMonths, startOfMonth } from 'date-fns'
 import type { Client, ClientStage, Booking, Billboard, BookingStatus, PaymentStatus } from '@/types/database'
 import { STAGE_CONFIG, BOOKING_STATUS_CONFIG, PAYMENT_STATUS_CONFIG } from '@/types/database'
 import Link from 'next/link'
@@ -29,7 +29,7 @@ export default function ClientDetailPage() {
   const [editingBookingId, setEditingBookingId] = useState<string | null>(null)
   const [form, setForm] = useState<Partial<Client>>({})
   const [bookingForm, setBookingForm] = useState({
-    billboard_id: '', start_date: '', end_date: '', monthly_rate: 0, num_months: 1, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', notes: '',
+    billboard_id: '', start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', notes: '',
     status: 'upcoming' as BookingStatus, payment_status: 'pending_payment' as PaymentStatus,
   })
   const [loading, setLoading] = useState(true)
@@ -64,24 +64,36 @@ export default function ClientDetailPage() {
     router.push('/clients')
   }
 
+  function calcMonths(start: string, end: string): number {
+    if (!start || !end) return 0
+    const s = startOfMonth(parseISO(start))
+    const e = startOfMonth(parseISO(end))
+    return differenceInMonths(e, s) + 1 // inclusive: Mar-Aug = 6
+  }
+
+  function recalcTotal(form: typeof bookingForm, overrides: Partial<typeof bookingForm> = {}) {
+    const merged = { ...form, ...overrides }
+    const months = calcMonths(merged.start_date, merged.end_date)
+    return { ...merged, total_amount: merged.monthly_rate * months }
+  }
+
   async function handleAddBooking(e: React.FormEvent) {
     e.preventDefault()
-    const { num_months, ...data } = bookingForm
     if (editingBookingId) {
-      await supabase.from('bookings').update(data).eq('id', editingBookingId)
+      await supabase.from('bookings').update(bookingForm).eq('id', editingBookingId)
       setEditingBookingId(null)
     } else {
-      await supabase.from('bookings').insert({ ...data, client_id: params.id })
+      await supabase.from('bookings').insert({ ...bookingForm, client_id: params.id })
     }
     setShowAddBooking(false)
-    setBookingForm({ billboard_id: billboards[0]?.id || '', start_date: '', end_date: '', monthly_rate: 0, num_months: 1, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', notes: '', status: 'upcoming', payment_status: 'pending_payment' })
+    setBookingForm({ billboard_id: billboards[0]?.id || '', start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', notes: '', status: 'upcoming', payment_status: 'pending_payment' })
     load()
   }
 
   function startEditBooking(b: Booking & { billboard: Billboard }) {
     setBookingForm({
       billboard_id: b.billboard_id, start_date: b.start_date, end_date: b.end_date,
-      monthly_rate: b.monthly_rate, num_months: b.monthly_rate ? Math.round(b.total_amount / b.monthly_rate) || 1 : 1, total_amount: b.total_amount, slot_number: b.slot_number,
+      monthly_rate: b.monthly_rate, total_amount: b.total_amount, slot_number: b.slot_number,
       brand_name: b.brand_name || '', sales_person: b.sales_person || '', notes: b.notes || '',
       status: b.status, payment_status: b.payment_status,
     })
@@ -160,7 +172,7 @@ export default function ClientDetailPage() {
       {/* Bookings */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Bookings</h2>
-        <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => { setShowAddBooking(!showAddBooking); if (showAddBooking) { setEditingBookingId(null); setBookingForm({ billboard_id: billboards[0]?.id || '', start_date: '', end_date: '', monthly_rate: 0, num_months: 1, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', notes: '', status: 'upcoming', payment_status: 'pending_payment' }) } }}>{showAddBooking ? <><X className="h-4 w-4 mr-1" /> Cancel</> : <><Plus className="h-4 w-4 mr-1" /> Add Booking</>}</Button>
+        <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => { setShowAddBooking(!showAddBooking); if (showAddBooking) { setEditingBookingId(null); setBookingForm({ billboard_id: billboards[0]?.id || '', start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', notes: '', status: 'upcoming', payment_status: 'pending_payment' }) } }}>{showAddBooking ? <><X className="h-4 w-4 mr-1" /> Cancel</> : <><Plus className="h-4 w-4 mr-1" /> Add Booking</>}</Button>
       </div>
 
       {showAddBooking && (
@@ -176,12 +188,12 @@ export default function ClientDetailPage() {
               <div><Label>Brand Name (shown on calendar)</Label><Input placeholder="e.g. AirAsia, Grab, etc." value={bookingForm.brand_name} onChange={e => setBookingForm(f => ({ ...f, brand_name: e.target.value }))} /></div>
               <div><Label>Sales Person</Label><Input placeholder="Who closed this deal?" value={bookingForm.sales_person} onChange={e => setBookingForm(f => ({ ...f, sales_person: e.target.value }))} /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>Start Date (In)</Label><Input type="date" value={bookingForm.start_date} onChange={e => setBookingForm(f => ({ ...f, start_date: e.target.value }))} required /></div>
-                <div><Label>End Date (Out)</Label><Input type="date" value={bookingForm.end_date} onChange={e => setBookingForm(f => ({ ...f, end_date: e.target.value }))} required /></div>
+                <div><Label>Start Date (In)</Label><Input type="date" value={bookingForm.start_date} onChange={e => setBookingForm(f => recalcTotal(f, { start_date: e.target.value }))} required /></div>
+                <div><Label>End Date (Out)</Label><Input type="date" value={bookingForm.end_date} onChange={e => setBookingForm(f => recalcTotal(f, { end_date: e.target.value }))} required /></div>
               </div>
               <div className="grid grid-cols-3 gap-3">
-                <div><Label>Monthly Rate (RM)</Label><Input type="number" value={bookingForm.monthly_rate || ''} onChange={e => { const rate = +e.target.value; setBookingForm(f => ({ ...f, monthly_rate: rate, total_amount: rate * f.num_months })) }} /></div>
-                <div><Label>Months</Label><Input type="number" min={1} value={bookingForm.num_months || ''} onChange={e => { const m = +e.target.value; setBookingForm(f => ({ ...f, num_months: m, total_amount: f.monthly_rate * m })) }} /></div>
+                <div><Label>Monthly Rate (RM)</Label><Input type="number" value={bookingForm.monthly_rate || ''} onChange={e => setBookingForm(f => recalcTotal(f, { monthly_rate: +e.target.value }))} /></div>
+                <div><Label>Months</Label><Input type="number" value={calcMonths(bookingForm.start_date, bookingForm.end_date) || ''} readOnly className="bg-gray-50" /></div>
                 <div><Label>Total (RM)</Label><Input type="number" value={bookingForm.total_amount || ''} readOnly className="bg-gray-50" /></div>
               </div>
               <div><Label>Slot Number</Label><Input type="number" min={1} max={10} value={bookingForm.slot_number} onChange={e => setBookingForm(f => ({ ...f, slot_number: +e.target.value }))} /></div>
