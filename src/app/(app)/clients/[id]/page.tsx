@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -34,6 +34,7 @@ export default function ClientDetailPage() {
     _months: 0,
   })
   const [loading, setLoading] = useState(true)
+  const bookingFormRef = useRef<HTMLDivElement>(null)
 
   async function load() {
     const [cl, bk, bb] = await Promise.all([
@@ -105,6 +106,7 @@ export default function ClientDetailPage() {
     })
     setEditingBookingId(b.id)
     setShowAddBooking(true)
+    setTimeout(() => bookingFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
   }
 
   async function deleteBooking(id: string) {
@@ -182,7 +184,7 @@ export default function ClientDetailPage() {
       </div>
 
       {showAddBooking && (
-        <Card>
+        <Card ref={bookingFormRef}>
           <CardContent className="p-4">
             <h3 className="font-semibold mb-3">{editingBookingId ? 'Edit Booking' : 'Add Booking'}</h3>
             <form onSubmit={handleAddBooking} className="space-y-3">
