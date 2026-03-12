@@ -53,6 +53,7 @@ export interface Booking {
   total_amount: number
   status: BookingStatus
   payment_status: PaymentStatus
+  spot_size: number
   brand_name: string | null
   sales_person: string | null
   notes: string | null

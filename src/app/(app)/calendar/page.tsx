@@ -65,6 +65,7 @@ export default function CalendarPage() {
         <div className="flex gap-2 text-xs">
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-500"></span> In</span>
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-500"></span> Out</span>
+          <span className="flex items-center gap-1"><span className="w-1.5 h-3 rounded bg-gray-400"></span> Half</span>
         </div>
       </div>
 
@@ -106,7 +107,7 @@ export default function CalendarPage() {
                       key={`${ev.booking.id}-${ev.type}-${i}`}
                       className={`text-[8px] md:text-[10px] px-1 rounded truncate text-white font-medium ${
                         ev.type === 'in' ? 'bg-green-500' : 'bg-red-500'
-                      }`}
+                      } ${ev.booking.spot_size === 0.5 ? 'w-1/2 opacity-80' : 'w-full'}`}
                     >
                       {ev.booking.brand_name || ev.booking.client?.company_name} ({ev.type})
                     </div>
