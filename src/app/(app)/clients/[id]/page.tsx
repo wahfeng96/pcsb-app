@@ -212,7 +212,7 @@ export default function ClientDetailPage() {
                 <div><Label>Months</Label><Input type="number" min={1} value={bookingForm._months || ''} onChange={e => setBookingForm(f => recalcTotal(f, { _months: +e.target.value } as any))} /></div>
                 <div><Label>Total (RM)</Label><Input type="number" value={bookingForm.total_amount || ''} readOnly className="bg-gray-50" /></div>
               </div>
-              <div><Label>Slot Number</Label><Input type="number" min={1} max={10} value={bookingForm.slot_number} onChange={e => setBookingForm(f => ({ ...f, slot_number: +e.target.value }))} /></div>
+              <div><Label>Slot Number</Label><Input type="number" min={1} max={15} value={bookingForm.slot_number} onChange={e => setBookingForm(f => ({ ...f, slot_number: +e.target.value }))} /></div>
               <div><Label>Status</Label>
                 <select className="w-full border rounded-md px-3 py-2 text-sm" value={bookingForm.status} onChange={e => setBookingForm(f => ({ ...f, status: e.target.value as BookingStatus }))}>
                   <option value="upcoming">Upcoming</option><option value="live">Live</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option>

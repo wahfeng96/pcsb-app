@@ -58,7 +58,7 @@ export default function BillboardsPage() {
   const [newCost, setNewCost] = useState({ name: '', amount: 0, start_month: '', end_month: '' })
   const [viewMonth, setViewMonth] = useState(startOfMonth(new Date()))
   const [showAddBb, setShowAddBb] = useState(false)
-  const [bbForm, setBbForm] = useState({ name: '', location: '', max_slots: 10, description: '' })
+  const [bbForm, setBbForm] = useState({ name: '', location: '', max_slots: 15, description: '' })
 
   async function load() {
     const [bb, bk, pr, cs] = await Promise.all([
@@ -81,7 +81,7 @@ export default function BillboardsPage() {
     if (!bbForm.name.trim()) return
     await supabase.from('billboards').insert({ name: bbForm.name, location: bbForm.location, max_slots: bbForm.max_slots, description: bbForm.description || null })
     setShowAddBb(false)
-    setBbForm({ name: '', location: '', max_slots: 10, description: '' })
+    setBbForm({ name: '', location: '', max_slots: 15, description: '' })
     load()
   }
 
