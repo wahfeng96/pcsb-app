@@ -6,21 +6,16 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, addMonths, subMonths, isWithinInterval, parseISO } from 'date-fns'
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, subMonths, parseISO, isSameDay } from 'date-fns'
 import type { Booking, Client, Billboard } from '@/types/database'
-import { BOOKING_STATUS_CONFIG } from '@/types/database'
 
 type BookingWithRefs = Booking & { client: Client; billboard: Billboard }
-
-const BILLBOARD_COLORS: Record<string, string> = {}
-const COLOR_PALETTE = ['bg-red-200', 'bg-blue-200', 'bg-green-200', 'bg-yellow-200', 'bg-purple-200']
 
 export default function CalendarPage() {
   const supabase = createClient()
   const [bookings, setBookings] = useState<BookingWithRefs[]>([])
   const [billboards, setBillboards] = useState<Billboard[]>([])
   const [currentMonth, setCurrentMonth] = useState(new Date())
-  const [view, setView] = useState<'month' | 'billboard'>('month')
   const [selectedBillboard, setSelectedBillboard] = useState<string>('all')
   const [loading, setLoading] = useState(true)
 
@@ -32,9 +27,6 @@ export default function CalendarPage() {
       ])
       setBookings(bk.data || [])
       setBillboards(bb.data || [])
-      ;(bb.data || []).forEach((b: Billboard, i: number) => {
-        BILLBOARD_COLORS[b.id] = COLOR_PALETTE[i % COLOR_PALETTE.length]
-      })
       setLoading(false)
     }
     load()
@@ -43,8 +35,6 @@ export default function CalendarPage() {
   const monthStart = startOfMonth(currentMonth)
   const monthEnd = endOfMonth(currentMonth)
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd })
-
-  // Pad start to Monday
   const startDay = monthStart.getDay() || 7
   const padDays = startDay - 1
 
@@ -53,12 +43,17 @@ export default function CalendarPage() {
     return bookings.filter(b => b.billboard_id === selectedBillboard)
   }, [bookings, selectedBillboard])
 
-  function getBookingsForDay(date: Date) {
-    return filteredBookings.filter(b => {
+  // Get IN (start) and OUT (end) events for a specific day
+  function getEventsForDay(date: Date) {
+    const events: { type: 'in' | 'out'; booking: BookingWithRefs }[] = []
+    filteredBookings.forEach(b => {
+      if (b.status === 'cancelled') return
       const start = parseISO(b.start_date)
       const end = parseISO(b.end_date)
-      return isWithinInterval(date, { start, end })
+      if (isSameDay(date, start)) events.push({ type: 'in', booking: b })
+      if (isSameDay(date, end)) events.push({ type: 'out', booking: b })
     })
+    return events
   }
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600" /></div>
@@ -67,9 +62,9 @@ export default function CalendarPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Calendar</h1>
-        <div className="flex gap-1">
-          <Button size="sm" variant={view === 'month' ? 'default' : 'outline'} onClick={() => setView('month')} className={view === 'month' ? 'bg-red-600 hover:bg-red-700' : ''}>Month</Button>
-          <Button size="sm" variant={view === 'billboard' ? 'default' : 'outline'} onClick={() => setView('billboard')} className={view === 'billboard' ? 'bg-red-600 hover:bg-red-700' : ''}>Billboard</Button>
+        <div className="flex gap-2 text-xs">
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-500"></span> In</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-500"></span> Out</span>
         </div>
       </div>
 
@@ -84,80 +79,86 @@ export default function CalendarPage() {
       <div className="flex gap-2 overflow-x-auto pb-1">
         <Button size="sm" variant={selectedBillboard === 'all' ? 'default' : 'outline'} onClick={() => setSelectedBillboard('all')} className={selectedBillboard === 'all' ? 'bg-red-600 hover:bg-red-700' : ''}>All</Button>
         {billboards.map(bb => (
-          <Button key={bb.id} size="sm" variant={selectedBillboard === bb.id ? 'default' : 'outline'} onClick={() => setSelectedBillboard(bb.id)} className={`whitespace-nowrap ${selectedBillboard === bb.id ? 'bg-red-600 hover:bg-red-700' : ''}`}>{bb.name}</Button>
+          <Button key={bb.id} size="sm" variant={selectedBillboard === bb.id ? 'default' : 'outline'} onClick={() => setSelectedBillboard(bb.id)} className={`whitespace-nowrap text-xs ${selectedBillboard === bb.id ? 'bg-red-600 hover:bg-red-700' : ''}`}>{bb.name}</Button>
         ))}
       </div>
 
-      {view === 'month' ? (
-        /* Monthly Calendar Grid */
-        <div>
-          <div className="grid grid-cols-7 gap-px text-center text-xs font-medium text-gray-500 mb-1">
-            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => <div key={d}>{d}</div>)}
-          </div>
-          <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-lg overflow-hidden">
-            {Array.from({ length: padDays }).map((_, i) => <div key={`pad-${i}`} className="bg-gray-50 min-h-[60px] md:min-h-[80px]" />)}
-            {days.map(day => {
-              const dayBookings = getBookingsForDay(day)
-              return (
-                <div
-                  key={day.toISOString()}
-                  className={`bg-white min-h-[60px] md:min-h-[80px] p-1 ${isToday(day) ? 'ring-2 ring-red-500 ring-inset' : ''}`}
-                >
-                  <span className={`text-xs font-medium ${isToday(day) ? 'text-red-600' : 'text-gray-700'}`}>
-                    {format(day, 'd')}
-                  </span>
-                  <div className="space-y-px mt-px">
-                    {dayBookings.slice(0, 3).map(b => (
-                      <div key={b.id} className={`text-[9px] md:text-[10px] px-1 rounded truncate ${BILLBOARD_COLORS[b.billboard_id] || 'bg-gray-200'}`}>
-                        {b.client?.company_name}
-                      </div>
-                    ))}
-                    {dayBookings.length > 3 && (
-                      <div className="text-[9px] text-gray-500 px-1">+{dayBookings.length - 3} more</div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+      {/* Calendar Grid */}
+      <div>
+        <div className="grid grid-cols-7 gap-px text-center text-xs font-medium text-gray-500 mb-1">
+          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => <div key={d}>{d}</div>)}
         </div>
-      ) : (
-        /* Billboard / Gantt View */
-        <div className="space-y-4">
-          {(selectedBillboard === 'all' ? billboards : billboards.filter(b => b.id === selectedBillboard)).map(bb => {
-            const bbBookings = bookings.filter(b => b.billboard_id === bb.id && (b.status === 'live' || b.status === 'upcoming'))
+        <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-lg overflow-hidden">
+          {Array.from({ length: padDays }).map((_, i) => <div key={`pad-${i}`} className="bg-gray-50 min-h-[65px]" />)}
+          {days.map(day => {
+            const events = getEventsForDay(day)
             return (
-              <Card key={bb.id}>
-                <CardContent className="p-4">
-                  <h3 className="font-semibold text-sm mb-3">{bb.name} <span className="text-gray-500 font-normal">— {bb.location}</span></h3>
-                  {bbBookings.length === 0 ? (
-                    <p className="text-sm text-gray-400">No active bookings</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {bbBookings.map((b, idx) => (
-                        <div key={b.id} className="flex items-center gap-3">
-                          <span className="text-xs text-gray-400 w-6">#{idx + 1}</span>
-                          <div className="flex-1 bg-gray-50 rounded-lg p-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium">{b.client?.company_name}</span>
-                              <Badge variant="secondary" className={BOOKING_STATUS_CONFIG[b.status]?.color + ' text-[10px]'}>
-                                {BOOKING_STATUS_CONFIG[b.status]?.label}
-                              </Badge>
-                            </div>
-                            <p className="text-xs text-gray-500 mt-1">
-                              {format(parseISO(b.start_date), 'dd MMM yyyy')} → {format(parseISO(b.end_date), 'dd MMM yyyy')}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
+              <div
+                key={day.toISOString()}
+                className={`bg-white min-h-[65px] p-1 ${isToday(day) ? 'ring-2 ring-red-500 ring-inset' : ''}`}
+              >
+                <span className={`text-xs font-medium ${isToday(day) ? 'text-red-600 font-bold' : 'text-gray-700'}`}>
+                  {format(day, 'd')}
+                </span>
+                <div className="space-y-px mt-px">
+                  {events.slice(0, 3).map((ev, i) => (
+                    <div
+                      key={`${ev.booking.id}-${ev.type}-${i}`}
+                      className={`text-[8px] md:text-[10px] px-1 rounded truncate text-white font-medium ${
+                        ev.type === 'in' ? 'bg-green-500' : 'bg-red-500'
+                      }`}
+                    >
+                      {ev.booking.client?.company_name} ({ev.type})
                     </div>
+                  ))}
+                  {events.length > 3 && (
+                    <div className="text-[8px] text-gray-500 px-1">+{events.length - 3}</div>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             )
           })}
         </div>
-      )}
+      </div>
+
+      {/* Upcoming Events List */}
+      <div>
+        <h3 className="font-semibold text-sm mb-2">Upcoming In/Out</h3>
+        <div className="space-y-2">
+          {filteredBookings
+            .filter(b => b.status !== 'cancelled')
+            .flatMap(b => {
+              const events: { date: string; type: 'in' | 'out'; booking: BookingWithRefs }[] = []
+              events.push({ date: b.start_date, type: 'in', booking: b })
+              events.push({ date: b.end_date, type: 'out', booking: b })
+              return events
+            })
+            .filter(ev => parseISO(ev.date) >= new Date(new Date().setHours(0,0,0,0)))
+            .sort((a, b) => a.date.localeCompare(b.date))
+            .slice(0, 10)
+            .map((ev, i) => (
+              <Card key={i}>
+                <CardContent className="p-3 flex items-center gap-3">
+                  <div className={`w-2 h-8 rounded-full ${ev.type === 'in' ? 'bg-green-500' : 'bg-red-500'}`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{ev.booking.client?.company_name}</p>
+                    <p className="text-xs text-gray-500">{ev.booking.billboard?.name}</p>
+                  </div>
+                  <div className="text-right">
+                    <Badge className={`text-[10px] ${ev.type === 'in' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      {ev.type === 'in' ? '🟢 IN' : '🔴 OUT'}
+                    </Badge>
+                    <p className="text-xs text-gray-500 mt-1">{format(parseISO(ev.date), 'dd MMM yyyy')}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          }
+          {filteredBookings.length === 0 && (
+            <Card><CardContent className="p-4 text-center text-gray-500 text-sm">No bookings yet. Add clients and bookings to see them here.</CardContent></Card>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

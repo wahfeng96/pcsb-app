@@ -9,8 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { ArrowLeft, Edit2, Plus, Trash2, Phone, Mail, MapPin } from 'lucide-react'
+import { ArrowLeft, Edit2, Plus, Trash2, Phone, Mail, MapPin, X } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import type { Client, ClientStage, Booking, Billboard, BookingStatus, PaymentStatus } from '@/types/database'
 import { STAGE_CONFIG, BOOKING_STATUS_CONFIG, PAYMENT_STATUS_CONFIG } from '@/types/database'
@@ -136,12 +135,13 @@ export default function ClientDetailPage() {
       {/* Bookings */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Bookings</h2>
-        <Dialog open={showAddBooking} onOpenChange={setShowAddBooking}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="bg-red-600 hover:bg-red-700"><Plus className="h-4 w-4 mr-1" /> Add Booking</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Add Booking</DialogTitle></DialogHeader>
+        <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => setShowAddBooking(!showAddBooking)}>{showAddBooking ? <><X className="h-4 w-4 mr-1" /> Cancel</> : <><Plus className="h-4 w-4 mr-1" /> Add Booking</>}</Button>
+      </div>
+
+      {showAddBooking && (
+        <Card>
+          <CardContent className="p-4">
+            <h3 className="font-semibold mb-3">Add Booking</h3>
             <form onSubmit={handleAddBooking} className="space-y-3">
               <div><Label>Billboard</Label>
                 <select className="w-full border rounded-md px-3 py-2 text-sm" value={bookingForm.billboard_id} onChange={e => setBookingForm(f => ({ ...f, billboard_id: e.target.value }))}>
@@ -149,8 +149,8 @@ export default function ClientDetailPage() {
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>Start Date</Label><Input type="date" value={bookingForm.start_date} onChange={e => setBookingForm(f => ({ ...f, start_date: e.target.value }))} required /></div>
-                <div><Label>End Date</Label><Input type="date" value={bookingForm.end_date} onChange={e => setBookingForm(f => ({ ...f, end_date: e.target.value }))} required /></div>
+                <div><Label>Start Date (In)</Label><Input type="date" value={bookingForm.start_date} onChange={e => setBookingForm(f => ({ ...f, start_date: e.target.value }))} required /></div>
+                <div><Label>End Date (Out)</Label><Input type="date" value={bookingForm.end_date} onChange={e => setBookingForm(f => ({ ...f, end_date: e.target.value }))} required /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Monthly Rate (RM)</Label><Input type="number" value={bookingForm.monthly_rate} onChange={e => setBookingForm(f => ({ ...f, monthly_rate: +e.target.value }))} /></div>
@@ -172,9 +172,9 @@ export default function ClientDetailPage() {
               <div><Label>Notes</Label><Textarea value={bookingForm.notes} onChange={e => setBookingForm(f => ({ ...f, notes: e.target.value }))} /></div>
               <Button type="submit" className="w-full bg-red-600 hover:bg-red-700">Add Booking</Button>
             </form>
-          </DialogContent>
-        </Dialog>
-      </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="space-y-2">
         {bookings.length === 0 ? (
