@@ -86,11 +86,22 @@ export default function DashboardPage() {
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-gray-500 mb-1">
               <DollarSign className="h-4 w-4" />
-              <span className="text-xs">Pending Payment</span>
+              <span className="text-xs">Revenue</span>
             </div>
-            <p className="text-2xl font-bold text-red-600">
-              {bookings.filter(b => b.payment_status === 'pending_payment').length}
-            </p>
+            <div className="flex rounded-lg overflow-hidden border mt-1">
+              <div className="flex-1 bg-green-50 p-2 text-center border-r">
+                <p className="text-[10px] text-green-700 font-medium">Settled</p>
+                <p className="text-sm font-bold text-green-700">
+                  RM {bookings.filter(b => b.payment_status === 'settled' && b.status !== 'cancelled').reduce((sum, b) => sum + (b.total_amount || 0), 0).toLocaleString()}
+                </p>
+              </div>
+              <div className="flex-1 bg-red-50 p-2 text-center">
+                <p className="text-[10px] text-red-700 font-medium">Total (incl. pending)</p>
+                <p className="text-sm font-bold text-red-700">
+                  RM {bookings.filter(b => b.status !== 'cancelled').reduce((sum, b) => sum + (b.total_amount || 0), 0).toLocaleString()}
+                </p>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
