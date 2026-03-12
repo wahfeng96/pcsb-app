@@ -53,6 +53,7 @@ export interface Booking {
   total_amount: number
   status: BookingStatus
   payment_status: PaymentStatus
+  brand_name: string | null
   notes: string | null
   created_at: string
   // joined

@@ -108,7 +108,7 @@ export default function CalendarPage() {
                         ev.type === 'in' ? 'bg-green-500' : 'bg-red-500'
                       }`}
                     >
-                      {ev.booking.client?.company_name} ({ev.type})
+                      {ev.booking.brand_name || ev.booking.client?.company_name} ({ev.type})
                     </div>
                   ))}
                   {events.length > 3 && (
@@ -141,7 +141,7 @@ export default function CalendarPage() {
                 <CardContent className="p-3 flex items-center gap-3">
                   <div className={`w-2 h-8 rounded-full ${ev.type === 'in' ? 'bg-green-500' : 'bg-red-500'}`} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{ev.booking.client?.company_name}</p>
+                    <p className="text-sm font-medium truncate">{ev.booking.brand_name || ev.booking.client?.company_name}</p>
                     <p className="text-xs text-gray-500">{ev.booking.billboard?.name}</p>
                   </div>
                   <div className="text-right">

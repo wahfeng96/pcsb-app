@@ -26,9 +26,10 @@ export default function ClientDetailPage() {
   const [billboards, setBillboards] = useState<Billboard[]>([])
   const [editing, setEditing] = useState(false)
   const [showAddBooking, setShowAddBooking] = useState(false)
+  const [editingBookingId, setEditingBookingId] = useState<string | null>(null)
   const [form, setForm] = useState<Partial<Client>>({})
   const [bookingForm, setBookingForm] = useState({
-    billboard_id: '', start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, notes: '',
+    billboard_id: '', start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', notes: '',
     status: 'upcoming' as BookingStatus, payment_status: 'pending_payment' as PaymentStatus,
   })
   const [loading, setLoading] = useState(true)
@@ -65,8 +66,31 @@ export default function ClientDetailPage() {
 
   async function handleAddBooking(e: React.FormEvent) {
     e.preventDefault()
-    await supabase.from('bookings').insert({ ...bookingForm, client_id: params.id })
+    if (editingBookingId) {
+      await supabase.from('bookings').update({ ...bookingForm }).eq('id', editingBookingId)
+      setEditingBookingId(null)
+    } else {
+      await supabase.from('bookings').insert({ ...bookingForm, client_id: params.id })
+    }
     setShowAddBooking(false)
+    setBookingForm({ billboard_id: billboards[0]?.id || '', start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', notes: '', status: 'upcoming', payment_status: 'pending_payment' })
+    load()
+  }
+
+  function startEditBooking(b: Booking & { billboard: Billboard }) {
+    setBookingForm({
+      billboard_id: b.billboard_id, start_date: b.start_date, end_date: b.end_date,
+      monthly_rate: b.monthly_rate, total_amount: b.total_amount, slot_number: b.slot_number,
+      brand_name: b.brand_name || '', notes: b.notes || '',
+      status: b.status, payment_status: b.payment_status,
+    })
+    setEditingBookingId(b.id)
+    setShowAddBooking(true)
+  }
+
+  async function deleteBooking(id: string) {
+    if (!confirm('Delete this booking?')) return
+    await supabase.from('bookings').delete().eq('id', id)
     load()
   }
 
@@ -135,19 +159,20 @@ export default function ClientDetailPage() {
       {/* Bookings */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Bookings</h2>
-        <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => setShowAddBooking(!showAddBooking)}>{showAddBooking ? <><X className="h-4 w-4 mr-1" /> Cancel</> : <><Plus className="h-4 w-4 mr-1" /> Add Booking</>}</Button>
+        <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => { setShowAddBooking(!showAddBooking); if (showAddBooking) { setEditingBookingId(null); setBookingForm({ billboard_id: billboards[0]?.id || '', start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', notes: '', status: 'upcoming', payment_status: 'pending_payment' }) } }}>{showAddBooking ? <><X className="h-4 w-4 mr-1" /> Cancel</> : <><Plus className="h-4 w-4 mr-1" /> Add Booking</>}</Button>
       </div>
 
       {showAddBooking && (
         <Card>
           <CardContent className="p-4">
-            <h3 className="font-semibold mb-3">Add Booking</h3>
+            <h3 className="font-semibold mb-3">{editingBookingId ? 'Edit Booking' : 'Add Booking'}</h3>
             <form onSubmit={handleAddBooking} className="space-y-3">
               <div><Label>Billboard</Label>
                 <select className="w-full border rounded-md px-3 py-2 text-sm" value={bookingForm.billboard_id} onChange={e => setBookingForm(f => ({ ...f, billboard_id: e.target.value }))}>
                   {billboards.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </select>
               </div>
+              <div><Label>Brand Name (shown on calendar)</Label><Input placeholder="e.g. AirAsia, Grab, etc." value={bookingForm.brand_name} onChange={e => setBookingForm(f => ({ ...f, brand_name: e.target.value }))} /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Start Date (In)</Label><Input type="date" value={bookingForm.start_date} onChange={e => setBookingForm(f => ({ ...f, start_date: e.target.value }))} required /></div>
                 <div><Label>End Date (Out)</Label><Input type="date" value={bookingForm.end_date} onChange={e => setBookingForm(f => ({ ...f, end_date: e.target.value }))} required /></div>
@@ -184,11 +209,14 @@ export default function ClientDetailPage() {
             <CardContent className="p-3">
               <div className="flex items-center justify-between mb-1">
                 <span className="font-medium text-sm">{b.billboard?.name}</span>
-                <div className="flex gap-1">
+                <div className="flex gap-1 items-center">
                   <Badge variant="secondary" className={BOOKING_STATUS_CONFIG[b.status]?.color + ' text-[10px]'}>{BOOKING_STATUS_CONFIG[b.status]?.label}</Badge>
                   <Badge variant="outline" className={PAYMENT_STATUS_CONFIG[b.payment_status]?.color + ' text-[10px]'}>{PAYMENT_STATUS_CONFIG[b.payment_status]?.label}</Badge>
+                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => startEditBooking(b)}><Edit2 className="h-3 w-3" /></Button>
+                  <Button size="icon" variant="ghost" className="h-6 w-6 text-red-600" onClick={() => deleteBooking(b.id)}><Trash2 className="h-3 w-3" /></Button>
                 </div>
               </div>
+              {b.brand_name && <p className="text-xs font-medium text-gray-700">Brand: {b.brand_name}</p>}
               <p className="text-xs text-gray-500">
                 Slot #{b.slot_number} • {format(parseISO(b.start_date), 'dd MMM yyyy')} → {format(parseISO(b.end_date), 'dd MMM yyyy')}
               </p>
