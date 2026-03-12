@@ -54,6 +54,7 @@ export interface Booking {
   status: BookingStatus
   payment_status: PaymentStatus
   brand_name: string | null
+  sales_person: string | null
   notes: string | null
   created_at: string
   // joined

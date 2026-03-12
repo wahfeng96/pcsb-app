@@ -29,7 +29,7 @@ export default function ClientDetailPage() {
   const [editingBookingId, setEditingBookingId] = useState<string | null>(null)
   const [form, setForm] = useState<Partial<Client>>({})
   const [bookingForm, setBookingForm] = useState({
-    billboard_id: '', start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', notes: '',
+    billboard_id: '', start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', notes: '',
     status: 'upcoming' as BookingStatus, payment_status: 'pending_payment' as PaymentStatus,
   })
   const [loading, setLoading] = useState(true)
@@ -73,7 +73,7 @@ export default function ClientDetailPage() {
       await supabase.from('bookings').insert({ ...bookingForm, client_id: params.id })
     }
     setShowAddBooking(false)
-    setBookingForm({ billboard_id: billboards[0]?.id || '', start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', notes: '', status: 'upcoming', payment_status: 'pending_payment' })
+    setBookingForm({ billboard_id: billboards[0]?.id || '', start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', notes: '', status: 'upcoming', payment_status: 'pending_payment' })
     load()
   }
 
@@ -81,7 +81,7 @@ export default function ClientDetailPage() {
     setBookingForm({
       billboard_id: b.billboard_id, start_date: b.start_date, end_date: b.end_date,
       monthly_rate: b.monthly_rate, total_amount: b.total_amount, slot_number: b.slot_number,
-      brand_name: b.brand_name || '', notes: b.notes || '',
+      brand_name: b.brand_name || '', sales_person: b.sales_person || '', notes: b.notes || '',
       status: b.status, payment_status: b.payment_status,
     })
     setEditingBookingId(b.id)
@@ -159,7 +159,7 @@ export default function ClientDetailPage() {
       {/* Bookings */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Bookings</h2>
-        <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => { setShowAddBooking(!showAddBooking); if (showAddBooking) { setEditingBookingId(null); setBookingForm({ billboard_id: billboards[0]?.id || '', start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', notes: '', status: 'upcoming', payment_status: 'pending_payment' }) } }}>{showAddBooking ? <><X className="h-4 w-4 mr-1" /> Cancel</> : <><Plus className="h-4 w-4 mr-1" /> Add Booking</>}</Button>
+        <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => { setShowAddBooking(!showAddBooking); if (showAddBooking) { setEditingBookingId(null); setBookingForm({ billboard_id: billboards[0]?.id || '', start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', notes: '', status: 'upcoming', payment_status: 'pending_payment' }) } }}>{showAddBooking ? <><X className="h-4 w-4 mr-1" /> Cancel</> : <><Plus className="h-4 w-4 mr-1" /> Add Booking</>}</Button>
       </div>
 
       {showAddBooking && (
@@ -173,6 +173,7 @@ export default function ClientDetailPage() {
                 </select>
               </div>
               <div><Label>Brand Name (shown on calendar)</Label><Input placeholder="e.g. AirAsia, Grab, etc." value={bookingForm.brand_name} onChange={e => setBookingForm(f => ({ ...f, brand_name: e.target.value }))} /></div>
+              <div><Label>Sales Person</Label><Input placeholder="Who closed this deal?" value={bookingForm.sales_person} onChange={e => setBookingForm(f => ({ ...f, sales_person: e.target.value }))} /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Start Date (In)</Label><Input type="date" value={bookingForm.start_date} onChange={e => setBookingForm(f => ({ ...f, start_date: e.target.value }))} required /></div>
                 <div><Label>End Date (Out)</Label><Input type="date" value={bookingForm.end_date} onChange={e => setBookingForm(f => ({ ...f, end_date: e.target.value }))} required /></div>
@@ -217,6 +218,7 @@ export default function ClientDetailPage() {
                 </div>
               </div>
               {b.brand_name && <p className="text-xs font-medium text-gray-700">Brand: {b.brand_name}</p>}
+              {b.sales_person && <p className="text-xs text-gray-500">Sales: {b.sales_person}</p>}
               <p className="text-xs text-gray-500">
                 Slot #{b.slot_number} • {format(parseISO(b.start_date), 'dd MMM yyyy')} → {format(parseISO(b.end_date), 'dd MMM yyyy')}
               </p>
