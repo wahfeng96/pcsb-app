@@ -31,6 +31,7 @@ export default function ClientDetailPage() {
   const [bookingForm, setBookingForm] = useState({
     billboard_id: '', start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', notes: '',
     status: 'upcoming' as BookingStatus, payment_status: 'pending_payment' as PaymentStatus,
+    _months: 0,
   })
   const [loading, setLoading] = useState(true)
 
@@ -73,27 +74,31 @@ export default function ClientDetailPage() {
 
   function recalcTotal(form: typeof bookingForm, overrides: Partial<typeof bookingForm> = {}) {
     const merged = { ...form, ...overrides }
-    const months = calcMonths(merged.start_date, merged.end_date)
-    return { ...merged, total_amount: merged.monthly_rate * months }
+    // If dates changed, recalc _months from dates
+    if (overrides.start_date !== undefined || overrides.end_date !== undefined) {
+      merged._months = calcMonths(merged.start_date, merged.end_date)
+    }
+    return { ...merged, total_amount: merged.monthly_rate * (merged._months || 0) }
   }
 
   async function handleAddBooking(e: React.FormEvent) {
     e.preventDefault()
+    const { _months, ...data } = bookingForm
     if (editingBookingId) {
-      await supabase.from('bookings').update(bookingForm).eq('id', editingBookingId)
+      await supabase.from('bookings').update(data).eq('id', editingBookingId)
       setEditingBookingId(null)
     } else {
-      await supabase.from('bookings').insert({ ...bookingForm, client_id: params.id })
+      await supabase.from('bookings').insert({ ...data, client_id: params.id })
     }
     setShowAddBooking(false)
-    setBookingForm({ billboard_id: billboards[0]?.id || '', start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', notes: '', status: 'upcoming', payment_status: 'pending_payment' })
+    setBookingForm({ billboard_id: billboards[0]?.id || '', start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', notes: '', status: 'upcoming', payment_status: 'pending_payment', _months: 0 })
     load()
   }
 
   function startEditBooking(b: Booking & { billboard: Billboard }) {
     setBookingForm({
       billboard_id: b.billboard_id, start_date: b.start_date, end_date: b.end_date,
-      monthly_rate: b.monthly_rate, total_amount: b.total_amount, slot_number: b.slot_number,
+      monthly_rate: b.monthly_rate, _months: b.monthly_rate ? Math.round(b.total_amount / b.monthly_rate) : calcMonths(b.start_date, b.end_date), total_amount: b.total_amount, slot_number: b.slot_number,
       brand_name: b.brand_name || '', sales_person: b.sales_person || '', notes: b.notes || '',
       status: b.status, payment_status: b.payment_status,
     })
@@ -172,7 +177,7 @@ export default function ClientDetailPage() {
       {/* Bookings */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Bookings</h2>
-        <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => { setShowAddBooking(!showAddBooking); if (showAddBooking) { setEditingBookingId(null); setBookingForm({ billboard_id: billboards[0]?.id || '', start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', notes: '', status: 'upcoming', payment_status: 'pending_payment' }) } }}>{showAddBooking ? <><X className="h-4 w-4 mr-1" /> Cancel</> : <><Plus className="h-4 w-4 mr-1" /> Add Booking</>}</Button>
+        <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => { setShowAddBooking(!showAddBooking); if (showAddBooking) { setEditingBookingId(null); setBookingForm({ billboard_id: billboards[0]?.id || '', start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', notes: '', status: 'upcoming', payment_status: 'pending_payment', _months: 0 }) } }}>{showAddBooking ? <><X className="h-4 w-4 mr-1" /> Cancel</> : <><Plus className="h-4 w-4 mr-1" /> Add Booking</>}</Button>
       </div>
 
       {showAddBooking && (
@@ -193,7 +198,7 @@ export default function ClientDetailPage() {
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div><Label>Monthly Rate (RM)</Label><Input type="number" value={bookingForm.monthly_rate || ''} onChange={e => setBookingForm(f => recalcTotal(f, { monthly_rate: +e.target.value }))} /></div>
-                <div><Label>Months</Label><Input type="number" value={calcMonths(bookingForm.start_date, bookingForm.end_date) || ''} readOnly className="bg-gray-50" /></div>
+                <div><Label>Months</Label><Input type="number" min={1} value={bookingForm._months || ''} onChange={e => setBookingForm(f => recalcTotal(f, { _months: +e.target.value } as any))} /></div>
                 <div><Label>Total (RM)</Label><Input type="number" value={bookingForm.total_amount || ''} readOnly className="bg-gray-50" /></div>
               </div>
               <div><Label>Slot Number</Label><Input type="number" min={1} max={10} value={bookingForm.slot_number} onChange={e => setBookingForm(f => ({ ...f, slot_number: +e.target.value }))} /></div>
