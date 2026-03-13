@@ -35,7 +35,9 @@ export default function ClientDetailPage() {
   })
   const [loading, setLoading] = useState(true)
   const [allBrandNames, setAllBrandNames] = useState<string[]>([])
+  const [allSalesPersons, setAllSalesPersons] = useState<string[]>([])
   const [showBrandSuggestions, setShowBrandSuggestions] = useState(false)
+  const [showSalesSuggestions, setShowSalesSuggestions] = useState(false)
   const bookingFormRef = useRef<HTMLDivElement>(null)
 
   async function load() {
@@ -43,15 +45,16 @@ export default function ClientDetailPage() {
       supabase.from('clients').select('*').eq('id', params.id).single(),
       supabase.from('bookings').select('*, billboard:billboards(*)').eq('client_id', params.id).order('start_date', { ascending: false }),
       supabase.from('billboards').select('*').order('name'),
-      supabase.from('bookings').select('brand_name').neq('brand_name', '').not('brand_name', 'is', null),
+      supabase.from('bookings').select('brand_name, sales_person'),
     ])
     setClient(cl.data)
     setForm(cl.data || {})
     setBookings(bk.data || [])
     setBillboards(bb.data || [])
     if (bb.data?.[0]) setBookingForm(f => ({ ...f, billboard_id: bb.data[0].id }))
-    const uniqueBrands = [...new Set((allBk.data || []).map(b => b.brand_name).filter(Boolean))] as string[]
-    setAllBrandNames(uniqueBrands.sort())
+    const allData = allBk.data || []
+    setAllBrandNames([...new Set(allData.map(b => b.brand_name).filter(Boolean))].sort() as string[])
+    setAllSalesPersons([...new Set(allData.map((b: any) => b.sales_person).filter(Boolean))].sort() as string[])
     setLoading(false)
   }
 
@@ -229,7 +232,29 @@ export default function ClientDetailPage() {
                   })()
                 )}
               </div>
-              <div><Label>Sales Person</Label><Input placeholder="Who closed this deal?" value={bookingForm.sales_person} onChange={e => setBookingForm(f => ({ ...f, sales_person: e.target.value }))} /></div>
+              <div className="relative">
+                <Label>Sales Person</Label>
+                <Input
+                  placeholder="Who closed this deal?"
+                  value={bookingForm.sales_person}
+                  onChange={e => { setBookingForm(f => ({ ...f, sales_person: e.target.value })); setShowSalesSuggestions(true) }}
+                  onFocus={() => setShowSalesSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSalesSuggestions(false), 200)}
+                  autoComplete="off"
+                />
+                {showSalesSuggestions && bookingForm.sales_person && (
+                  (() => {
+                    const filtered = allSalesPersons.filter(s => s.toLowerCase().includes(bookingForm.sales_person.toLowerCase()) && s !== bookingForm.sales_person)
+                    return filtered.length > 0 ? (
+                      <div className="absolute z-20 w-full mt-1 bg-white border rounded-md shadow-lg max-h-40 overflow-y-auto">
+                        {filtered.map(s => (
+                          <button key={s} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 truncate" onClick={() => { setBookingForm(f => ({ ...f, sales_person: s })); setShowSalesSuggestions(false) }}>{s}</button>
+                        ))}
+                      </div>
+                    ) : null
+                  })()
+                )}
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Start Date (In)</Label><Input type="date" value={bookingForm.start_date} onChange={e => setBookingForm(f => recalcTotal(f, { start_date: e.target.value }))} required /></div>
                 <div><Label>End Date (Out)</Label><Input type="date" value={bookingForm.end_date} onChange={e => setBookingForm(f => recalcTotal(f, { end_date: e.target.value }))} required /></div>
