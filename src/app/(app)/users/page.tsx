@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Users, Edit2, Eye, Trash2, Plus, X, Check, UserCheck, UserX, ShieldCheck, ShieldX } from 'lucide-react'
 import type { Profile, Billboard, UserRole } from '@/types/database'
+import { useRole } from '@/lib/hooks/use-role'
 
 type UserAccess = {
   user_id: string
@@ -18,6 +19,7 @@ type UserAccess = {
 
 export default function UsersPage() {
   const supabase = createClient()
+  const { canEdit } = useRole()
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [billboards, setBillboards] = useState<Billboard[]>([])
   const [accessMap, setAccessMap] = useState<UserAccess[]>([])
@@ -146,6 +148,7 @@ export default function UsersPage() {
                       <p className="text-xs text-gray-500">{user.email}</p>
                     </div>
                   </div>
+                  {canEdit && (
                   <div className="flex items-center gap-2">
                     <select
                       className="text-xs border rounded px-2 py-1"
@@ -171,10 +174,11 @@ export default function UsersPage() {
                       </div>
                     )}
                   </div>
+                  )}
                 </div>
 
-                {/* Approve / Remove actions for non-owner users */}
-                {user.role !== 'owner' && (
+                {/* Approve / Remove actions for non-owner users - owner only */}
+                {canEdit && user.role !== 'owner' && (
                   <div className="flex gap-1.5 mb-2">
                     {!user.approved ? (
                       <Button size="sm" variant="outline" className="text-xs text-green-700 border-green-300 hover:bg-green-50" onClick={() => toggleApproval(user.id, true)}>

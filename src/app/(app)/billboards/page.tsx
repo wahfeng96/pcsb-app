@@ -12,6 +12,7 @@ import { format, parseISO, startOfMonth, endOfMonth, addMonths, subMonths, diffe
 import { getRevenueMonths } from '@/lib/booking-utils'
 import type { Billboard, Booking, Client, Profile } from '@/types/database'
 import { BOOKING_STATUS_CONFIG } from '@/types/database'
+import { useRole } from '@/lib/hooks/use-role'
 
 type CostItem = { id: string; billboard_id: string; name: string; amount: number; start_month: string | null; end_month: string | null }
 
@@ -47,6 +48,7 @@ function getMonthlyCost(cost: CostItem): { month: Date; amount: number }[] {
 
 export default function BillboardsPage() {
   const supabase = createClient()
+  const { canEdit } = useRole()
   const [billboards, setBillboards] = useState<Billboard[]>([])
   const [bookings, setBookings] = useState<(Booking & { client: Client })[]>([])
   const [partners, setPartners] = useState<Profile[]>([])
@@ -164,7 +166,7 @@ export default function BillboardsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Billboards</h1>
-        <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => setShowAddBb(!showAddBb)}>{showAddBb ? <><X className="h-4 w-4 mr-1" /> Cancel</> : <><Plus className="h-4 w-4 mr-1" /> Add Billboard</>}</Button>
+        {canEdit && <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => setShowAddBb(!showAddBb)}>{showAddBb ? <><X className="h-4 w-4 mr-1" /> Cancel</> : <><Plus className="h-4 w-4 mr-1" /> Add Billboard</>}</Button>}
       </div>
 
       {showAddBb && (
@@ -212,8 +214,8 @@ export default function BillboardsPage() {
                   </div>
                   <div className="flex items-center gap-1">
                     <Badge variant="secondary">{active.length}/{bb.max_slots} slots</Badge>
-                    <Button size="icon" variant="ghost" onClick={() => { setEditingBb(isEditing ? null : bb.id); setEditForm({ partner_id: bb.partner_id || '', profit_share_percent: bb.profit_share_percent || 0 }) }}><Edit2 className="h-4 w-4" /></Button>
-                    <Button size="icon" variant="ghost" className="text-red-600" onClick={() => handleDeleteBillboard(bb.id)}><Trash2 className="h-4 w-4" /></Button>
+                    {canEdit && <Button size="icon" variant="ghost" onClick={() => { setEditingBb(isEditing ? null : bb.id); setEditForm({ partner_id: bb.partner_id || '', profit_share_percent: bb.profit_share_percent || 0 }) }}><Edit2 className="h-4 w-4" /></Button>}
+                    {canEdit && <Button size="icon" variant="ghost" className="text-red-600" onClick={() => handleDeleteBillboard(bb.id)}><Trash2 className="h-4 w-4" /></Button>}
                   </div>
                 </div>
 
@@ -314,7 +316,7 @@ export default function BillboardsPage() {
                                       <p className="text-xs font-medium">RM {c.amount.toLocaleString()} total</p>
                                       {thisMonth && <p className="text-[10px] text-orange-600">RM {Math.round(thisMonth.amount).toLocaleString()}/mo</p>}
                                     </div>
-                                    <Button size="icon" variant="ghost" className="h-6 w-6 text-red-400 hover:text-red-600" onClick={() => handleDeleteCost(c.id)}><Trash2 className="h-3 w-3" /></Button>
+                                    {canEdit && <Button size="icon" variant="ghost" className="h-6 w-6 text-red-400 hover:text-red-600" onClick={() => handleDeleteCost(c.id)}><Trash2 className="h-3 w-3" /></Button>}
                                   </div>
                                 </div>
                               </div>

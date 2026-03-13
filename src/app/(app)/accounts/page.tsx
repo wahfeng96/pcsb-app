@@ -9,6 +9,7 @@ import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Download, FileText }
 import { format, startOfMonth, addMonths, subMonths, parseISO, isSameMonth } from 'date-fns'
 import { getRevenueMonths } from '@/lib/booking-utils'
 import type { Billboard, Booking, Client } from '@/types/database'
+import { useRole } from '@/lib/hooks/use-role'
 
 type BookingWithRefs = Booking & { client: Client; billboard: Billboard }
 type CostItem = { id: string; billboard_id: string; name: string; amount: number; start_month: string | null; end_month: string | null }
@@ -34,6 +35,7 @@ function getMonthsBetween(start: Date, end: Date): Date[] {
 
 export default function AccountsPage() {
   const supabase = createClient()
+  const { canEdit } = useRole()
   const [billboards, setBillboards] = useState<Billboard[]>([])
   const [bookings, setBookings] = useState<BookingWithRefs[]>([])
   const [costs, setCosts] = useState<CostItem[]>([])
@@ -324,7 +326,7 @@ export default function AccountsPage() {
                               size="sm"
                               variant="outline"
                               className={`text-[10px] h-7 ${display.color}`}
-                              onClick={() => cyclePaymentStatus(b.id, monthKey, b.monthly_rate || 0)}
+                              onClick={() => canEdit && cyclePaymentStatus(b.id, monthKey, b.monthly_rate || 0)}
                             >
                               {display.icon} {display.label}
                             </Button>
@@ -360,7 +362,7 @@ export default function AccountsPage() {
                                       size="sm"
                                       variant="outline"
                                       className={`text-[9px] h-6 px-2 ${mDisplay.color}`}
-                                      onClick={() => cyclePaymentStatus(b.id, mKey, b.monthly_rate || 0)}
+                                      onClick={() => canEdit && cyclePaymentStatus(b.id, mKey, b.monthly_rate || 0)}
                                     >
                                       {mDisplay.icon} {mDisplay.label}
                                     </Button>

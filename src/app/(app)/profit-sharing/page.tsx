@@ -9,6 +9,7 @@ import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react'
 import { format, startOfMonth, addMonths, subMonths, parseISO, isSameMonth } from 'date-fns'
 import { getRevenueMonths } from '@/lib/booking-utils'
 import type { Billboard, Booking, Client } from '@/types/database'
+import { useRole } from '@/lib/hooks/use-role'
 
 type BookingWithRefs = Booking & { client: Client; billboard: Billboard }
 type ProfitShareRecord = { id: string; billboard_id: string; sales_person: string; month: string; amount: number; status: 'pending_payment' | 'waiting_profit_share' | 'settled' }
@@ -33,6 +34,7 @@ function getMonthsBetween(start: Date, end: Date): Date[] {
 
 export default function ProfitSharingPage() {
   const supabase = createClient()
+  const { canEdit } = useRole()
   const [billboards, setBillboards] = useState<Billboard[]>([])
   const [bookings, setBookings] = useState<BookingWithRefs[]>([])
   const [profitRecords, setProfitRecords] = useState<ProfitShareRecord[]>([])
@@ -329,7 +331,7 @@ export default function ProfitSharingPage() {
                                               size="sm"
                                               variant="outline"
                                               className={`text-[9px] h-5 px-1.5 ${clientDisplay.color}`}
-                                              onClick={() => cycleBookingStatus(client.bookingId, monthKey, client.amount)}
+                                              onClick={() => canEdit && cycleBookingStatus(client.bookingId, monthKey, client.amount)}
                                             >
                                               {clientDisplay.icon} {clientDisplay.label}
                                             </Button>
