@@ -34,19 +34,24 @@ export default function ClientDetailPage() {
     _months: 0,
   })
   const [loading, setLoading] = useState(true)
+  const [allBrandNames, setAllBrandNames] = useState<string[]>([])
+  const [showBrandSuggestions, setShowBrandSuggestions] = useState(false)
   const bookingFormRef = useRef<HTMLDivElement>(null)
 
   async function load() {
-    const [cl, bk, bb] = await Promise.all([
+    const [cl, bk, bb, allBk] = await Promise.all([
       supabase.from('clients').select('*').eq('id', params.id).single(),
       supabase.from('bookings').select('*, billboard:billboards(*)').eq('client_id', params.id).order('start_date', { ascending: false }),
       supabase.from('billboards').select('*').order('name'),
+      supabase.from('bookings').select('brand_name').neq('brand_name', '').not('brand_name', 'is', null),
     ])
     setClient(cl.data)
     setForm(cl.data || {})
     setBookings(bk.data || [])
     setBillboards(bb.data || [])
     if (bb.data?.[0]) setBookingForm(f => ({ ...f, billboard_id: bb.data[0].id }))
+    const uniqueBrands = [...new Set((allBk.data || []).map(b => b.brand_name).filter(Boolean))] as string[]
+    setAllBrandNames(uniqueBrands.sort())
     setLoading(false)
   }
 
@@ -201,7 +206,29 @@ export default function ClientDetailPage() {
                 </div>
                 {!bookingForm.spot_size && <p className="text-[10px] text-red-500 mt-1">Please select spot size</p>}
               </div>
-              <div><Label>Brand Name (shown on calendar)</Label><Input placeholder="e.g. AirAsia, Grab, etc." value={bookingForm.brand_name} onChange={e => setBookingForm(f => ({ ...f, brand_name: e.target.value }))} /></div>
+              <div className="relative">
+                <Label>Brand Name (shown on calendar)</Label>
+                <Input
+                  placeholder="e.g. AirAsia, Grab, etc."
+                  value={bookingForm.brand_name}
+                  onChange={e => { setBookingForm(f => ({ ...f, brand_name: e.target.value })); setShowBrandSuggestions(true) }}
+                  onFocus={() => setShowBrandSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowBrandSuggestions(false), 200)}
+                  autoComplete="off"
+                />
+                {showBrandSuggestions && bookingForm.brand_name && (
+                  (() => {
+                    const filtered = allBrandNames.filter(b => b.toLowerCase().includes(bookingForm.brand_name.toLowerCase()) && b !== bookingForm.brand_name)
+                    return filtered.length > 0 ? (
+                      <div className="absolute z-20 w-full mt-1 bg-white border rounded-md shadow-lg max-h-40 overflow-y-auto">
+                        {filtered.map(b => (
+                          <button key={b} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 truncate" onClick={() => { setBookingForm(f => ({ ...f, brand_name: b })); setShowBrandSuggestions(false) }}>{b}</button>
+                        ))}
+                      </div>
+                    ) : null
+                  })()
+                )}
+              </div>
               <div><Label>Sales Person</Label><Input placeholder="Who closed this deal?" value={bookingForm.sales_person} onChange={e => setBookingForm(f => ({ ...f, sales_person: e.target.value }))} /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Start Date (In)</Label><Input type="date" value={bookingForm.start_date} onChange={e => setBookingForm(f => recalcTotal(f, { start_date: e.target.value }))} required /></div>
