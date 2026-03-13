@@ -83,12 +83,16 @@ export default function UsersPage() {
   }
 
   async function removeUser(userId: string, email: string) {
-    if (!confirm(`Remove user "${email}"? They will need to sign up again.`)) return
-    // Delete from user_billboard_access first
-    await supabase.from('user_billboard_access').delete().eq('user_id', userId)
-    // Delete profile
-    await supabase.from('profiles').delete().eq('id', userId)
-    // Note: The auth.users record needs to be deleted via Supabase dashboard or admin API
+    if (!confirm(`Remove user "${email}"? They will be signed out and need to sign up again.`)) return
+    const res = await fetch('/api/admin/delete-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    })
+    if (!res.ok) {
+      const err = await res.json()
+      alert('Failed to remove user: ' + (err.error || 'Unknown error'))
+    }
     load()
   }
 
