@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Download, FileText } from 'lucide-react'
 import { format, startOfMonth, addMonths, subMonths, parseISO, isSameMonth } from 'date-fns'
+import { getRevenueMonths } from '@/lib/booking-utils'
 import type { Billboard, Booking, Client } from '@/types/database'
 
 type BookingWithRefs = Booking & { client: Client; billboard: Billboard }
@@ -60,11 +61,9 @@ export default function AccountsPage() {
 
   function getMonthlyRevenueForBooking(b: BookingWithRefs, month: Date): number {
     if (b.status === 'cancelled') return 0
-    const start = parseISO(b.start_date)
-    const end = parseISO(b.end_date)
-    const months = getMonthsBetween(start, end)
+    const months = getRevenueMonths(parseISO(b.start_date), b.monthly_rate, b.total_amount)
     if (!months.some(m => isSameMonth(m, month))) return 0
-    return b.monthly_rate || (months.length > 0 ? b.total_amount / months.length : 0)
+    return b.monthly_rate || 0
   }
 
   function getMonthlyCostForItem(c: CostItem, month: Date): number {

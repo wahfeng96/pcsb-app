@@ -6,20 +6,10 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { format, startOfMonth, addMonths, subMonths, parseISO, isSameMonth } from 'date-fns'
+import { getRevenueMonths } from '@/lib/booking-utils'
 import type { Billboard, Booking, Client } from '@/types/database'
 
 type BookingWithRefs = Booking & { client: Client; billboard: Billboard }
-
-function getMonthsBetween(start: Date, end: Date): Date[] {
-  const months: Date[] = []
-  let current = startOfMonth(start)
-  const last = startOfMonth(end)
-  while (current <= last) {
-    months.push(current)
-    current = addMonths(current, 1)
-  }
-  return months
-}
 
 export default function SalesSummaryPage() {
   const supabase = createClient()
@@ -72,8 +62,8 @@ export default function SalesSummaryPage() {
       }
 
       const row = rowMap.get(key)!
-      const bookingMonths = getMonthsBetween(parseISO(b.start_date), parseISO(b.end_date))
-      const monthlyAmt = b.monthly_rate || (bookingMonths.length > 0 ? b.total_amount / bookingMonths.length : 0)
+      const bookingMonths = getRevenueMonths(parseISO(b.start_date), b.monthly_rate, b.total_amount)
+      const monthlyAmt = b.monthly_rate || 0
 
       bookingMonths.forEach(m => {
         const mKey = format(m, 'yyyy-MM')

@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Edit2, DollarSign, Plus, Trash2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { format, parseISO, startOfMonth, endOfMonth, addMonths, subMonths, differenceInMonths, isSameMonth, isWithinInterval } from 'date-fns'
+import { getRevenueMonths } from '@/lib/booking-utils'
 import type { Billboard, Booking, Client, Profile } from '@/types/database'
 import { BOOKING_STATUS_CONFIG } from '@/types/database'
 
@@ -27,9 +28,8 @@ function getMonthsBetween(start: Date, end: Date): Date[] {
 
 function getMonthlyRevenue(booking: Booking): { month: Date; amount: number }[] {
   const start = parseISO(booking.start_date)
-  const end = parseISO(booking.end_date)
-  const months = getMonthsBetween(start, end)
-  const monthlyAmount = booking.monthly_rate || (months.length > 0 ? (booking.total_amount || 0) / months.length : 0)
+  const months = getRevenueMonths(start, booking.monthly_rate, booking.total_amount)
+  const monthlyAmount = booking.monthly_rate || 0
   return months.map(m => ({ month: m, amount: monthlyAmount }))
 }
 

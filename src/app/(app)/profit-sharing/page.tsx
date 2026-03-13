@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react'
 import { format, startOfMonth, addMonths, subMonths, parseISO, isSameMonth } from 'date-fns'
+import { getRevenueMonths } from '@/lib/booking-utils'
 import type { Billboard, Booking, Client } from '@/types/database'
 
 type BookingWithRefs = Booking & { client: Client; billboard: Billboard }
@@ -101,8 +102,8 @@ export default function ProfitSharingPage() {
         const monthMap = new Map<string, { month: Date; amount: number; clients: string[] }>()
 
         data.bookings.forEach(b => {
-          const months = getMonthsBetween(parseISO(b.start_date), parseISO(b.end_date))
-          const monthlyAmt = b.monthly_rate || (months.length > 0 ? b.total_amount / months.length : 0)
+          const months = getRevenueMonths(parseISO(b.start_date), b.monthly_rate, b.total_amount)
+          const monthlyAmt = b.monthly_rate || 0
 
           months.forEach(m => {
             const key = format(m, 'yyyy-MM')
