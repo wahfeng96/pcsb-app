@@ -39,6 +39,7 @@ export default function ProfitSharingPage() {
   const [loading, setLoading] = useState(true)
   const [selectedBb, setSelectedBb] = useState<string>('all')
   const [expandedSales, setExpandedSales] = useState<Set<string>>(new Set())
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set())
 
   async function load() {
     const [bb, bk, pr] = await Promise.all([
@@ -72,8 +73,36 @@ export default function ProfitSharingPage() {
     load()
   }
 
+  // Per-booking status (uses booking_id + month as key in payment_status on the booking itself)
+  function getBookingMonthStatus(bookingId: string, monthKey: string): ProfitShareRecord['status'] {
+    const rec = profitRecords.find(r => r.sales_person === bookingId && r.month === monthKey && r.billboard_id === '__booking__')
+    return rec?.status || 'pending_payment'
+  }
+
+  async function cycleBookingStatus(bookingId: string, monthKey: string, amount: number) {
+    const current = getBookingMonthStatus(bookingId, monthKey)
+    const next = STATUS_CYCLE[(STATUS_CYCLE.indexOf(current) + 1) % STATUS_CYCLE.length]
+
+    const existing = profitRecords.find(r => r.sales_person === bookingId && r.month === monthKey && r.billboard_id === '__booking__')
+    if (existing) {
+      await supabase.from('profit_sharing').update({ status: next }).eq('id', existing.id)
+    } else {
+      await supabase.from('profit_sharing').insert({ billboard_id: '__booking__', sales_person: bookingId, month: monthKey, amount, status: next })
+    }
+    load()
+  }
+
   function toggleExpanded(key: string) {
     setExpandedSales(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  function toggleMonth(key: string) {
+    setExpandedMonths(prev => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
       else next.add(key)
@@ -89,7 +118,7 @@ export default function ProfitSharingPage() {
       const bbBookings = bookings.filter(b => b.billboard_id === bb.id && b.sales_person)
 
       // Group by sales person
-      const salesMap = new Map<string, { bookings: BookingWithRefs[]; monthlyBreakdown: { month: Date; monthKey: string; amount: number; clients: string[] }[] }>()
+      const salesMap = new Map<string, { bookings: BookingWithRefs[]; monthlyBreakdown: { month: Date; monthKey: string; amount: number; clients: { name: string; amount: number; bookingId: string }[] }[] }>()
 
       bbBookings.forEach(b => {
         const sp = b.sales_person || 'Unknown'
@@ -99,7 +128,7 @@ export default function ProfitSharingPage() {
 
       // Build monthly breakdown per sales person
       salesMap.forEach((data, sp) => {
-        const monthMap = new Map<string, { month: Date; amount: number; clients: string[] }>()
+        const monthMap = new Map<string, { month: Date; amount: number; clients: { name: string; amount: number; bookingId: string }[] }>()
 
         data.bookings.forEach(b => {
           const months = getRevenueMonths(parseISO(b.start_date), b.monthly_rate, b.total_amount)
@@ -110,7 +139,7 @@ export default function ProfitSharingPage() {
             if (!monthMap.has(key)) monthMap.set(key, { month: m, amount: 0, clients: [] })
             const entry = monthMap.get(key)!
             entry.amount += monthlyAmt
-            entry.clients.push(b.brand_name || b.client?.company_name || 'Unknown')
+            entry.clients.push({ name: b.brand_name || b.client?.company_name || 'Unknown', amount: monthlyAmt, bookingId: b.id })
           })
         })
 
@@ -243,30 +272,66 @@ export default function ProfitSharingPage() {
                             const status = getStatus(bb.id, sp, monthKey)
                             const display = STATUS_DISPLAY[status]
                             const isCurrentMonth = isSameMonth(mb.month, new Date())
+                            const monthExpandKey = `${expandKey}-${monthKey}`
+                            const isMonthExpanded = expandedMonths.has(monthExpandKey)
 
                             return (
-                              <div
-                                key={monthKey}
-                                className={`flex items-center justify-between px-3 py-2 border-t ${isCurrentMonth ? 'bg-yellow-50' : ''}`}
-                              >
-                                <div>
-                                  <span className={`text-xs ${isCurrentMonth ? 'font-semibold' : 'text-gray-600'}`}>
-                                    {format(mb.month, 'MMM yyyy')}
-                                    {isCurrentMonth && <span className="text-[8px] text-yellow-600 ml-1">← now</span>}
-                                  </span>
-                                  <p className="text-[10px] text-gray-400 truncate max-w-[150px]">{mb.clients.join(', ')}</p>
+                              <div key={monthKey} className="border-t">
+                                {/* Month header row - clickable to expand */}
+                                <div
+                                  className={`flex items-center justify-between px-3 py-2 cursor-pointer ${isCurrentMonth ? 'bg-yellow-50' : 'hover:bg-gray-50'}`}
+                                  onClick={() => toggleMonth(monthExpandKey)}
+                                >
+                                  <div className="flex items-center gap-1.5">
+                                    {isMonthExpanded ? <ChevronDown className="h-3 w-3 text-gray-400" /> : <ChevronRight className="h-3 w-3 text-gray-400" />}
+                                    <div>
+                                      <span className={`text-xs ${isCurrentMonth ? 'font-semibold' : 'text-gray-600'}`}>
+                                        {format(mb.month, 'MMM yyyy')}
+                                        {isCurrentMonth && <span className="text-[8px] text-yellow-600 ml-1">← now</span>}
+                                      </span>
+                                      <p className="text-[10px] text-gray-400 truncate max-w-[150px]">{mb.clients.map(c => c.name).join(', ')}</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-medium">RM {Math.round(mb.amount).toLocaleString()}</span>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className={`text-[9px] h-6 px-2 ${display.color}`}
+                                      onClick={(e) => { e.stopPropagation(); cycleStatus(bb.id, sp, monthKey, mb.amount) }}
+                                    >
+                                      {display.icon} {display.label}
+                                    </Button>
+                                  </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs font-medium">RM {Math.round(mb.amount).toLocaleString()}</span>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className={`text-[9px] h-6 px-2 ${display.color}`}
-                                    onClick={(e) => { e.stopPropagation(); cycleStatus(bb.id, sp, monthKey, mb.amount) }}
-                                  >
-                                    {display.icon} {display.label}
-                                  </Button>
-                                </div>
+
+                                {/* Expanded: per-client detail */}
+                                {isMonthExpanded && (
+                                  <div className="bg-gray-50 border-t">
+                                    {mb.clients.map((client, idx) => {
+                                      const clientStatus = getBookingMonthStatus(client.bookingId, monthKey)
+                                      const clientDisplay = STATUS_DISPLAY[clientStatus]
+                                      return (
+                                        <div key={`${client.bookingId}-${idx}`} className="flex items-center justify-between px-5 py-1.5 border-t border-gray-100">
+                                          <div>
+                                            <p className="text-xs text-gray-700">{client.name}</p>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-[11px] text-gray-500">RM {Math.round(client.amount).toLocaleString()}</span>
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              className={`text-[9px] h-5 px-1.5 ${clientDisplay.color}`}
+                                              onClick={() => cycleBookingStatus(client.bookingId, monthKey, client.amount)}
+                                            >
+                                              {clientDisplay.icon} {clientDisplay.label}
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                )}
                               </div>
                             )
                           })}
