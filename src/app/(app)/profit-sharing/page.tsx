@@ -294,14 +294,21 @@ export default function ProfitSharingPage() {
                                   </div>
                                   <div className="flex items-center gap-2">
                                     <span className="text-xs font-medium">RM {Math.round(mb.amount).toLocaleString()}</span>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className={`text-[9px] h-6 px-2 ${display.color}`}
-                                      onClick={(e) => { e.stopPropagation(); cycleStatus(bb.id, sp, monthKey, mb.amount) }}
-                                    >
-                                      {display.icon} {display.label}
-                                    </Button>
+                                    {(() => {
+                                      const total = mb.clients.length
+                                      const settled = mb.clients.filter(c => getBookingMonthStatus(c.bookingId, monthKey) === 'settled').length
+                                      const waiting = mb.clients.filter(c => getBookingMonthStatus(c.bookingId, monthKey) === 'waiting_profit_share').length
+                                      const pct = total > 0 ? Math.round((settled / total) * 100) : 0
+                                      return (
+                                        <span className={`text-[9px] px-2 py-0.5 rounded-full ${
+                                          settled === total ? 'bg-green-100 text-green-700' :
+                                          settled > 0 || waiting > 0 ? 'bg-blue-100 text-blue-700' :
+                                          'bg-yellow-100 text-yellow-700'
+                                        }`}>
+                                          {settled === total ? '✅ Settled' : `${settled}/${total} settled`}
+                                        </span>
+                                      )
+                                    })()}
                                   </div>
                                 </div>
 
