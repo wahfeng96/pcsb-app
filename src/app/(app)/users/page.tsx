@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Users, Edit2, Eye, Trash2, Plus, X, Check } from 'lucide-react'
+import { Users, Edit2, Eye, Trash2, Plus, X, Check, UserCheck, UserX, ShieldCheck, ShieldX } from 'lucide-react'
 import type { Profile, Billboard, UserRole } from '@/types/database'
 
 type UserAccess = {
@@ -77,6 +77,21 @@ export default function UsersPage() {
     load()
   }
 
+  async function toggleApproval(userId: string, approved: boolean) {
+    await supabase.from('profiles').update({ approved }).eq('id', userId)
+    load()
+  }
+
+  async function removeUser(userId: string, email: string) {
+    if (!confirm(`Remove user "${email}"? They will need to sign up again.`)) return
+    // Delete from user_billboard_access first
+    await supabase.from('user_billboard_access').delete().eq('user_id', userId)
+    // Delete profile
+    await supabase.from('profiles').delete().eq('id', userId)
+    // Note: The auth.users record needs to be deleted via Supabase dashboard or admin API
+    load()
+  }
+
   function toggleBillboard(bbId: string) {
     setSelectedBillboards(prev => {
       const current = prev[bbId]
@@ -112,9 +127,20 @@ export default function UsersPage() {
             <Card key={user.id}>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <p className="font-semibold text-sm">{user.name || user.email}</p>
-                    <p className="text-xs text-gray-500">{user.email}</p>
+                  <div className="flex items-center gap-2">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-semibold text-sm">{user.name || user.email}</p>
+                        {user.role !== 'owner' && (
+                          user.approved ? (
+                            <Badge className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0">Approved</Badge>
+                          ) : (
+                            <Badge className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0">Pending</Badge>
+                          )
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500">{user.email}</p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <select
@@ -142,6 +168,24 @@ export default function UsersPage() {
                     )}
                   </div>
                 </div>
+
+                {/* Approve / Remove actions for non-owner users */}
+                {user.role !== 'owner' && (
+                  <div className="flex gap-1.5 mb-2">
+                    {!user.approved ? (
+                      <Button size="sm" variant="outline" className="text-xs text-green-700 border-green-300 hover:bg-green-50" onClick={() => toggleApproval(user.id, true)}>
+                        <ShieldCheck className="h-3 w-3 mr-1" /> Approve
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="outline" className="text-xs text-amber-700 border-amber-300 hover:bg-amber-50" onClick={() => toggleApproval(user.id, false)}>
+                        <ShieldX className="h-3 w-3 mr-1" /> Revoke
+                      </Button>
+                    )}
+                    <Button size="sm" variant="outline" className="text-xs text-red-600 border-red-200 hover:bg-red-50" onClick={() => removeUser(user.id, user.email)}>
+                      <Trash2 className="h-3 w-3 mr-1" /> Remove
+                    </Button>
+                  </div>
+                )}
 
                 {/* Current access display */}
                 {!isEditing && (

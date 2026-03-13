@@ -21,6 +21,7 @@ export interface Profile {
   email: string
   name: string
   role: UserRole
+  approved: boolean
   created_at: string
 }
 
