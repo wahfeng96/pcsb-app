@@ -326,7 +326,7 @@ export default function AccountsPage() {
                               size="sm"
                               variant="outline"
                               className={`text-[10px] h-7 ${display.color}`}
-                              onClick={() => canEdit && cyclePaymentStatus(b.id, monthKey, b.monthly_rate || 0)}
+                              onClick={() => cyclePaymentStatus(b.id, monthKey, b.monthly_rate || 0)}
                             >
                               {display.icon} {display.label}
                             </Button>
@@ -362,7 +362,7 @@ export default function AccountsPage() {
                                       size="sm"
                                       variant="outline"
                                       className={`text-[9px] h-6 px-2 ${mDisplay.color}`}
-                                      onClick={() => canEdit && cyclePaymentStatus(b.id, mKey, b.monthly_rate || 0)}
+                                      onClick={() => cyclePaymentStatus(b.id, mKey, b.monthly_rate || 0)}
                                     >
                                       {mDisplay.icon} {mDisplay.label}
                                     </Button>

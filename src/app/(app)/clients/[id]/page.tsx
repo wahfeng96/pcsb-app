@@ -138,8 +138,8 @@ export default function ClientDetailPage() {
       <div className="flex items-center gap-2">
         <Link href="/clients"><Button size="icon" variant="ghost"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <h1 className="text-xl font-bold text-gray-900 flex-1 truncate">{client.company_name}</h1>
-        {canEdit && <Button size="icon" variant="ghost" onClick={() => setEditing(!editing)}><Edit2 className="h-4 w-4" /></Button>}
-        {canEdit && <Button size="icon" variant="ghost" className="text-red-600" onClick={handleDelete}><Trash2 className="h-4 w-4" /></Button>}
+        <Button size="icon" variant="ghost" onClick={() => setEditing(!editing)}><Edit2 className="h-4 w-4" /></Button>
+        <Button size="icon" variant="ghost" className="text-red-600" onClick={handleDelete}><Trash2 className="h-4 w-4" /></Button>
       </div>
 
       {/* Stage pipeline */}
@@ -150,8 +150,7 @@ export default function ClientDetailPage() {
             size="sm"
             variant={client.stage === s ? 'default' : 'outline'}
             className={`text-xs whitespace-nowrap ${client.stage === s ? STAGE_CONFIG[s].color.replace('bg-', 'bg-').replace('text-', 'text-') : ''}`}
-            onClick={() => canEdit && updateStage(s)}
-            disabled={!canEdit}
+            onClick={() => updateStage(s)}
           >
             {STAGE_CONFIG[s].label}
           </Button>
@@ -191,7 +190,7 @@ export default function ClientDetailPage() {
       {/* Bookings */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Bookings</h2>
-        {canEdit && <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => { setShowAddBooking(!showAddBooking); if (showAddBooking) { setEditingBookingId(null); setBookingForm({ billboard_id: billboards[0]?.id || '', spot_size: '' as any, start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', notes: '', status: 'upcoming', payment_status: 'pending_payment', _months: 0 }) } }}>{showAddBooking ? <><X className="h-4 w-4 mr-1" /> Cancel</> : <><Plus className="h-4 w-4 mr-1" /> Add Booking</>}</Button>}
+        <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => { setShowAddBooking(!showAddBooking); if (showAddBooking) { setEditingBookingId(null); setBookingForm({ billboard_id: billboards[0]?.id || '', spot_size: '' as any, start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', notes: '', status: 'upcoming', payment_status: 'pending_payment', _months: 0 }) } }}>{showAddBooking ? <><X className="h-4 w-4 mr-1" /> Cancel</> : <><Plus className="h-4 w-4 mr-1" /> Add Booking</>}</Button>
       </div>
 
       {showAddBooking && (
@@ -298,8 +297,8 @@ export default function ClientDetailPage() {
                 <div className="flex gap-1 items-center">
                   <Badge variant="secondary" className={BOOKING_STATUS_CONFIG[b.status]?.color + ' text-[10px]'}>{BOOKING_STATUS_CONFIG[b.status]?.label}</Badge>
                   <Badge variant="outline" className={PAYMENT_STATUS_CONFIG[b.payment_status]?.color + ' text-[10px]'}>{PAYMENT_STATUS_CONFIG[b.payment_status]?.label}</Badge>
-                  {canEdit && <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => startEditBooking(b)}><Edit2 className="h-3 w-3" /></Button>}
-                  {canEdit && <Button size="icon" variant="ghost" className="h-6 w-6 text-red-600" onClick={() => deleteBooking(b.id)}><Trash2 className="h-3 w-3" /></Button>}
+                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => startEditBooking(b)}><Edit2 className="h-3 w-3" /></Button>
+                  <Button size="icon" variant="ghost" className="h-6 w-6 text-red-600" onClick={() => deleteBooking(b.id)}><Trash2 className="h-3 w-3" /></Button>
                 </div>
               </div>
               {b.brand_name && <p className="text-xs font-medium text-gray-700">Brand: {b.brand_name}</p>}

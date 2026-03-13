@@ -57,7 +57,7 @@ export default function ClientsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
-        {canEdit && <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => setShowAdd(!showAdd)}>{showAdd ? <><X className="h-4 w-4 mr-1" /> Cancel</> : <><Plus className="h-4 w-4 mr-1" /> Add</>}</Button>}
+        <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => setShowAdd(!showAdd)}>{showAdd ? <><X className="h-4 w-4 mr-1" /> Cancel</> : <><Plus className="h-4 w-4 mr-1" /> Add</>}</Button>
       </div>
 
       {showAdd && (

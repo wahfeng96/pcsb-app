@@ -331,7 +331,7 @@ export default function ProfitSharingPage() {
                                               size="sm"
                                               variant="outline"
                                               className={`text-[9px] h-5 px-1.5 ${clientDisplay.color}`}
-                                              onClick={() => canEdit && cycleBookingStatus(client.bookingId, monthKey, client.amount)}
+                                              onClick={() => cycleBookingStatus(client.bookingId, monthKey, client.amount)}
                                             >
                                               {clientDisplay.icon} {clientDisplay.label}
                                             </Button>
