@@ -327,14 +327,18 @@ export default function ProfitSharingPage() {
                                           </div>
                                           <div className="flex items-center gap-2">
                                             <span className="text-[11px] text-gray-500">RM {Math.round(client.amount).toLocaleString()}</span>
-                                            <Button
-                                              size="sm"
-                                              variant="outline"
-                                              className={`text-[9px] h-5 px-1.5 ${clientDisplay.color}`}
-                                              onClick={() => cycleBookingStatus(client.bookingId, monthKey, client.amount)}
-                                            >
-                                              {clientDisplay.icon} {clientDisplay.label}
-                                            </Button>
+                                            {canEdit ? (
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className={`text-[9px] h-5 px-1.5 ${clientDisplay.color}`}
+                                                onClick={() => cycleBookingStatus(client.bookingId, monthKey, client.amount)}
+                                              >
+                                                {clientDisplay.icon} {clientDisplay.label}
+                                              </Button>
+                                            ) : (
+                                              <Badge variant="outline" className={`text-[9px] ${clientDisplay.color}`}>{clientDisplay.icon} {clientDisplay.label}</Badge>
+                                            )}
                                           </div>
                                         </div>
                                       )

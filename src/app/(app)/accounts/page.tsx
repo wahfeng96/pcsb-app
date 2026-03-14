@@ -322,14 +322,18 @@ export default function AccountsPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             <p className="text-xs font-bold">RM {(b.monthly_rate || 0).toLocaleString()}</p>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className={`text-[10px] h-7 ${display.color}`}
-                              onClick={() => cyclePaymentStatus(b.id, monthKey, b.monthly_rate || 0)}
-                            >
-                              {display.icon} {display.label}
-                            </Button>
+                            {canEdit ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className={`text-[10px] h-7 ${display.color}`}
+                                onClick={() => cyclePaymentStatus(b.id, monthKey, b.monthly_rate || 0)}
+                              >
+                                {display.icon} {display.label}
+                              </Button>
+                            ) : (
+                              <Badge variant="outline" className={`text-[10px] ${display.color}`}>{display.icon} {display.label}</Badge>
+                            )}
                             <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => toggleExpanded(b.id)}>
                               {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                             </Button>
@@ -358,14 +362,18 @@ export default function AccountsPage() {
                                   </span>
                                   <div className="flex items-center gap-2">
                                     <span className="text-gray-500">RM {(b.monthly_rate || 0).toLocaleString()}</span>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className={`text-[9px] h-6 px-2 ${mDisplay.color}`}
-                                      onClick={() => cyclePaymentStatus(b.id, mKey, b.monthly_rate || 0)}
-                                    >
-                                      {mDisplay.icon} {mDisplay.label}
-                                    </Button>
+                                    {canEdit ? (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className={`text-[9px] h-6 px-2 ${mDisplay.color}`}
+                                        onClick={() => cyclePaymentStatus(b.id, mKey, b.monthly_rate || 0)}
+                                      >
+                                        {mDisplay.icon} {mDisplay.label}
+                                      </Button>
+                                    ) : (
+                                      <Badge variant="outline" className={`text-[9px] ${mDisplay.color}`}>{mDisplay.icon} {mDisplay.label}</Badge>
+                                    )}
                                   </div>
                                 </div>
                               )
