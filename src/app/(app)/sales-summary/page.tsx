@@ -10,27 +10,37 @@ import { getRevenueMonths } from '@/lib/booking-utils'
 import type { Billboard, Booking, Client } from '@/types/database'
 
 type BookingWithRefs = Booking & { client: Client; billboard: Billboard }
+type ProfitShareRecord = { id: string; billboard_id: string; sales_person: string; month: string; amount: number; status: 'pending_payment' | 'waiting_profit_share' | 'settled' }
 
 export default function SalesSummaryPage() {
   const supabase = createClient()
   const [billboards, setBillboards] = useState<Billboard[]>([])
   const [bookings, setBookings] = useState<BookingWithRefs[]>([])
+  const [profitRecords, setProfitRecords] = useState<ProfitShareRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedBb, setSelectedBb] = useState<string>('all')
   const [startMonth, setStartMonth] = useState(startOfMonth(new Date(new Date().getFullYear(), 0, 1))) // Jan this year
 
   useEffect(() => {
     async function load() {
-      const [bb, bk] = await Promise.all([
+      const [bb, bk, pr] = await Promise.all([
         supabase.from('billboards').select('*').order('name'),
         supabase.from('bookings').select('*, client:clients(*), billboard:billboards(*)').neq('status', 'cancelled').order('start_date'),
+        supabase.from('profit_sharing').select('*'),
       ])
       setBillboards(bb.data || [])
       setBookings(bk.data || [])
+      setProfitRecords(pr.data || [])
       setLoading(false)
     }
     load()
   }, [])
+
+  // Get booking-month status from profit_sharing records
+  function getBookingMonthStatus(bookingId: string, monthKey: string): ProfitShareRecord['status'] {
+    const rec = profitRecords.find(r => r.sales_person === bookingId && r.month === monthKey && r.billboard_id === '__booking__')
+    return rec?.status || 'pending_payment'
+  }
 
   // 12 months starting from startMonth
   const months = useMemo(() => {
@@ -49,6 +59,7 @@ export default function SalesSummaryPage() {
       label: string
       salesPerson: string
       monthAmounts: Map<string, number>
+      monthBookings: Map<string, { bookingId: string; amount: number }[]>
     }>()
 
     filteredBookings.forEach(b => {
@@ -58,7 +69,7 @@ export default function SalesSummaryPage() {
       const key = `${brandName}-${sp}-${b.billboard_id}`
 
       if (!rowMap.has(key)) {
-        rowMap.set(key, { label, salesPerson: sp, monthAmounts: new Map() })
+        rowMap.set(key, { label, salesPerson: sp, monthAmounts: new Map(), monthBookings: new Map() })
       }
 
       const row = rowMap.get(key)!
@@ -68,6 +79,8 @@ export default function SalesSummaryPage() {
       bookingMonths.forEach(m => {
         const mKey = format(m, 'yyyy-MM')
         row.monthAmounts.set(mKey, (row.monthAmounts.get(mKey) || 0) + monthlyAmt)
+        if (!row.monthBookings.has(mKey)) row.monthBookings.set(mKey, [])
+        row.monthBookings.get(mKey)!.push({ bookingId: b.id, amount: monthlyAmt })
       })
     })
 
@@ -139,9 +152,26 @@ export default function SalesSummaryPage() {
                   {months.map(m => {
                     const mKey = format(m, 'yyyy-MM')
                     const amt = row.monthAmounts.get(mKey) || 0
+                    const cellBookings = row.monthBookings.get(mKey) || []
                     const isCurrentMonth = isSameMonth(m, new Date())
+
+                    // Determine color based on booking statuses
+                    let colorClass = 'text-gray-200'
+                    if (amt > 0 && cellBookings.length > 0) {
+                      const statuses = cellBookings.map(cb => getBookingMonthStatus(cb.bookingId, mKey))
+                      const allSettled = statuses.every(s => s === 'settled')
+                      const allPending = statuses.every(s => s === 'pending_payment')
+                      if (allSettled) {
+                        colorClass = 'text-green-600 font-medium'
+                      } else if (allPending) {
+                        colorClass = 'text-red-600 font-medium'
+                      } else {
+                        colorClass = 'text-blue-600 font-medium'
+                      }
+                    }
+
                     return (
-                      <td key={mKey} className={`px-3 py-2 text-right tabular-nums ${isCurrentMonth ? 'bg-yellow-50' : ''} ${amt > 0 ? 'text-red-600 font-medium' : 'text-gray-200'}`}>
+                      <td key={mKey} className={`px-3 py-2 text-right tabular-nums ${isCurrentMonth ? 'bg-yellow-50' : ''} ${colorClass}`}>
                         {amt > 0 ? amt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
                       </td>
                     )
