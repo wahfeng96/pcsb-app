@@ -75,9 +75,9 @@ export default function ProfitSharingPage() {
     load()
   }
 
-  // Per-booking status (uses booking_id + month as key in payment_status on the booking itself)
+  // Per-booking status using booking_id column
   function getBookingMonthStatus(bookingId: string, monthKey: string): ProfitShareRecord['status'] {
-    const rec = profitRecords.find(r => r.sales_person === bookingId && r.month === monthKey && r.billboard_id === '__booking__')
+    const rec = profitRecords.find(r => (r as any).booking_id === bookingId && r.month === monthKey)
     return rec?.status || 'pending_payment'
   }
 
@@ -85,12 +85,12 @@ export default function ProfitSharingPage() {
     const current = getBookingMonthStatus(bookingId, monthKey)
     const next = STATUS_CYCLE[(STATUS_CYCLE.indexOf(current) + 1) % STATUS_CYCLE.length]
 
-    const existing = profitRecords.find(r => r.sales_person === bookingId && r.month === monthKey && r.billboard_id === '__booking__')
+    const existing = profitRecords.find(r => (r as any).booking_id === bookingId && r.month === monthKey)
     let result
     if (existing) {
       result = await supabase.from('profit_sharing').update({ status: next }).eq('id', existing.id)
     } else {
-      result = await supabase.from('profit_sharing').insert({ billboard_id: '__booking__', sales_person: bookingId, month: monthKey, amount, status: next })
+      result = await supabase.from('profit_sharing').insert({ booking_id: bookingId, month: monthKey, amount, status: next } as any)
     }
     if (result.error) {
       alert('Error: ' + result.error.message)
@@ -101,7 +101,7 @@ export default function ProfitSharingPage() {
       if (existing) {
         return prev.map(r => r.id === existing.id ? { ...r, status: next } : r)
       } else {
-        return [...prev, { id: crypto.randomUUID(), billboard_id: '__booking__', sales_person: bookingId, month: monthKey, amount, status: next }]
+        return [...prev, { id: crypto.randomUUID(), booking_id: bookingId, month: monthKey, amount, status: next } as any]
       }
     })
   }

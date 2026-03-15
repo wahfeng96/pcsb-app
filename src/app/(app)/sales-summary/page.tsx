@@ -38,7 +38,7 @@ export default function SalesSummaryPage() {
 
   // Get booking-month status from profit_sharing records
   function getBookingMonthStatus(bookingId: string, monthKey: string): ProfitShareRecord['status'] {
-    const rec = profitRecords.find(r => r.sales_person === bookingId && r.month === monthKey && r.billboard_id === '__booking__')
+    const rec = profitRecords.find(r => (r as any).booking_id === bookingId && r.month === monthKey)
     return rec?.status || 'pending_payment'
   }
 
