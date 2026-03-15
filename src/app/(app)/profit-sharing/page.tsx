@@ -86,14 +86,24 @@ export default function ProfitSharingPage() {
     const next = STATUS_CYCLE[(STATUS_CYCLE.indexOf(current) + 1) % STATUS_CYCLE.length]
 
     const existing = profitRecords.find(r => r.sales_person === bookingId && r.month === monthKey && r.billboard_id === '__booking__')
+    let result
     if (existing) {
-      const { error } = await supabase.from('profit_sharing').update({ status: next }).eq('id', existing.id)
-      if (error) { console.error('Update error:', error); alert('Failed to update: ' + error.message); return }
+      result = await supabase.from('profit_sharing').update({ status: next }).eq('id', existing.id)
     } else {
-      const { error } = await supabase.from('profit_sharing').insert({ billboard_id: '__booking__', sales_person: bookingId, month: monthKey, amount, status: next })
-      if (error) { console.error('Insert error:', error); alert('Failed to save: ' + error.message); return }
+      result = await supabase.from('profit_sharing').insert({ billboard_id: '__booking__', sales_person: bookingId, month: monthKey, amount, status: next })
     }
-    load()
+    if (result.error) {
+      alert('Error: ' + result.error.message)
+      return
+    }
+    // Optimistic update
+    setProfitRecords(prev => {
+      if (existing) {
+        return prev.map(r => r.id === existing.id ? { ...r, status: next } : r)
+      } else {
+        return [...prev, { id: crypto.randomUUID(), billboard_id: '__booking__', sales_person: bookingId, month: monthKey, amount, status: next }]
+      }
+    })
   }
 
   function toggleExpanded(key: string) {
@@ -329,18 +339,14 @@ export default function ProfitSharingPage() {
                                           </div>
                                           <div className="flex items-center gap-2">
                                             <span className="text-[11px] text-gray-500">RM {Math.round(client.amount).toLocaleString()}</span>
-                                            {canEdit ? (
                                               <Button
                                                 size="sm"
                                                 variant="outline"
                                                 className={`text-[9px] h-5 px-1.5 ${clientDisplay.color}`}
-                                                onClick={(e) => { e.stopPropagation(); cycleBookingStatus(client.bookingId, monthKey, client.amount) }}
+                                                onClick={(e) => { e.stopPropagation(); e.preventDefault(); cycleBookingStatus(client.bookingId, monthKey, client.amount) }}
                                               >
                                                 {clientDisplay.icon} {clientDisplay.label}
                                               </Button>
-                                            ) : (
-                                              <Badge variant="outline" className={`text-[9px] ${clientDisplay.color}`}>{clientDisplay.icon} {clientDisplay.label}</Badge>
-                                            )}
                                           </div>
                                         </div>
                                       )
