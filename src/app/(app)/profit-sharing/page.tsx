@@ -87,9 +87,11 @@ export default function ProfitSharingPage() {
 
     const existing = profitRecords.find(r => r.sales_person === bookingId && r.month === monthKey && r.billboard_id === '__booking__')
     if (existing) {
-      await supabase.from('profit_sharing').update({ status: next }).eq('id', existing.id)
+      const { error } = await supabase.from('profit_sharing').update({ status: next }).eq('id', existing.id)
+      if (error) { console.error('Update error:', error); alert('Failed to update: ' + error.message); return }
     } else {
-      await supabase.from('profit_sharing').insert({ billboard_id: '__booking__', sales_person: bookingId, month: monthKey, amount, status: next })
+      const { error } = await supabase.from('profit_sharing').insert({ billboard_id: '__booking__', sales_person: bookingId, month: monthKey, amount, status: next })
+      if (error) { console.error('Insert error:', error); alert('Failed to save: ' + error.message); return }
     }
     load()
   }
@@ -332,7 +334,7 @@ export default function ProfitSharingPage() {
                                                 size="sm"
                                                 variant="outline"
                                                 className={`text-[9px] h-5 px-1.5 ${clientDisplay.color}`}
-                                                onClick={() => cycleBookingStatus(client.bookingId, monthKey, client.amount)}
+                                                onClick={(e) => { e.stopPropagation(); cycleBookingStatus(client.bookingId, monthKey, client.amount) }}
                                               >
                                                 {clientDisplay.icon} {clientDisplay.label}
                                               </Button>
