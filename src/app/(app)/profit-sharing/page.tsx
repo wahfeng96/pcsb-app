@@ -160,14 +160,16 @@ export default function ProfitSharingPage() {
         data.monthlyBreakdown = Array.from(monthMap.values()).sort((a, b) => a.month.getTime() - b.month.getTime())
       })
 
-      // Totals per status
+      // Totals per status (aggregated from per-booking statuses)
       let totalPending = 0, totalWaiting = 0, totalSettled = 0
       salesMap.forEach((data, sp) => {
         data.monthlyBreakdown.forEach(mb => {
-          const status = getStatus(bb.id, sp, format(mb.month, 'yyyy-MM'))
-          if (status === 'pending_payment') totalPending += mb.amount
-          else if (status === 'waiting_profit_share') totalWaiting += mb.amount
-          else totalSettled += mb.amount
+          mb.clients.forEach(client => {
+            const status = getBookingMonthStatus(client.bookingId, format(mb.month, 'yyyy-MM'))
+            if (status === 'pending_payment') totalPending += client.amount
+            else if (status === 'waiting_profit_share') totalWaiting += client.amount
+            else totalSettled += client.amount
+          })
         })
       })
 
