@@ -12,7 +12,7 @@ import type { Billboard, Booking, Client } from '@/types/database'
 import { useRole } from '@/lib/hooks/use-role'
 
 type BookingWithRefs = Booking & { client: Client; billboard: Billboard }
-type ProfitShareRecord = { id: string; billboard_id: string; sales_person: string; month: string; amount: number; status: 'pending_payment' | 'waiting_profit_share' | 'settled' }
+type ProfitShareRecord = { id: string; booking_id?: string; billboard_id: string; sales_person: string; month: string; amount: number; status: 'pending_payment' | 'waiting_profit_share' | 'settled' }
 
 const STATUS_CYCLE: ProfitShareRecord['status'][] = ['pending_payment', 'waiting_profit_share', 'settled']
 const STATUS_DISPLAY: Record<string, { label: string; color: string; icon: string }> = {
@@ -40,6 +40,8 @@ export default function ProfitSharingPage() {
   const [profitRecords, setProfitRecords] = useState<ProfitShareRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedBb, setSelectedBb] = useState<string>('all')
+  const [filterYear, setFilterYear] = useState(new Date().getFullYear())
+  const [filterMonth, setFilterMonth] = useState<number | 'all'>('all')
   const [expandedSales, setExpandedSales] = useState<Set<string>>(new Set())
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set())
 
@@ -77,7 +79,7 @@ export default function ProfitSharingPage() {
 
   // Per-booking status using booking_id column
   function getBookingMonthStatus(bookingId: string, monthKey: string): ProfitShareRecord['status'] {
-    const rec = profitRecords.find(r => (r as any).booking_id === bookingId && r.month === monthKey)
+    const rec = profitRecords.find(r => r.booking_id === bookingId && r.month === monthKey)
     return rec?.status || 'pending_payment'
   }
 
@@ -85,7 +87,7 @@ export default function ProfitSharingPage() {
     const current = getBookingMonthStatus(bookingId, monthKey)
     const next = STATUS_CYCLE[(STATUS_CYCLE.indexOf(current) + 1) % STATUS_CYCLE.length]
 
-    const existing = profitRecords.find(r => (r as any).booking_id === bookingId && r.month === monthKey)
+    const existing = profitRecords.find(r => r.booking_id === bookingId && r.month === monthKey)
     let result
     if (existing) {
       result = await supabase.from('profit_sharing').update({ status: next }).eq('id', existing.id)
@@ -101,7 +103,7 @@ export default function ProfitSharingPage() {
       if (existing) {
         return prev.map(r => r.id === existing.id ? { ...r, status: next } : r)
       } else {
-        return [...prev, { id: crypto.randomUUID(), booking_id: bookingId, month: monthKey, amount, status: next } as any]
+        return [...prev, { id: crypto.randomUUID(), booking_id: bookingId, month: monthKey, amount, status: next, billboard_id: '', sales_person: '' }]
       }
     })
   }
@@ -157,7 +159,15 @@ export default function ProfitSharingPage() {
           })
         })
 
-        data.monthlyBreakdown = Array.from(monthMap.values()).sort((a, b) => a.month.getTime() - b.month.getTime())
+        data.monthlyBreakdown = Array.from(monthMap.values())
+          .filter(mb => {
+            const y = mb.month.getFullYear()
+            const m = mb.month.getMonth()
+            if (y !== filterYear) return false
+            if (filterMonth !== 'all' && m !== filterMonth) return false
+            return true
+          })
+          .sort((a, b) => a.month.getTime() - b.month.getTime())
       })
 
       // Totals per status (aggregated from per-booking statuses)
@@ -175,7 +185,7 @@ export default function ProfitSharingPage() {
 
       return { billboard: bb, salesPersons: salesMap, totalPending, totalWaiting, totalSettled }
     })
-  }, [billboards, bookings, profitRecords, selectedBb])
+  }, [billboards, bookings, profitRecords, selectedBb, filterYear, filterMonth])
 
   // Grand totals
   const grandTotals = useMemo(() => ({
@@ -196,6 +206,21 @@ export default function ProfitSharingPage() {
         {billboards.map(bb => (
           <Button key={bb.id} size="sm" variant={selectedBb === bb.id ? 'default' : 'outline'} onClick={() => setSelectedBb(bb.id)} className={`whitespace-nowrap text-xs ${selectedBb === bb.id ? 'bg-red-600 hover:bg-red-700' : ''}`}>{bb.name}</Button>
         ))}
+      </div>
+
+      {/* Year/Month filter */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setFilterYear(y => y - 1)}><ChevronLeft className="h-4 w-4" /></Button>
+          <span className="text-sm font-semibold min-w-[50px] text-center">{filterYear}</span>
+          <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setFilterYear(y => y + 1)}><ChevronRight className="h-4 w-4" /></Button>
+        </div>
+        <div className="flex gap-1 overflow-x-auto pb-1">
+          <Button size="sm" variant={filterMonth === 'all' ? 'default' : 'outline'} onClick={() => setFilterMonth('all')} className={`text-xs ${filterMonth === 'all' ? 'bg-red-600 hover:bg-red-700' : ''}`}>All</Button>
+          {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, i) => (
+            <Button key={m} size="sm" variant={filterMonth === i ? 'default' : 'outline'} onClick={() => setFilterMonth(i)} className={`text-xs ${filterMonth === i ? 'bg-red-600 hover:bg-red-700' : ''}`}>{m}</Button>
+          ))}
+        </div>
       </div>
 
       {/* Grand Summary */}

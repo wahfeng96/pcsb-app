@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { ArrowLeft, Edit2, Plus, Trash2, Phone, Mail, MapPin, X } from 'lucide-react'
 import { format, parseISO, differenceInMonths, startOfMonth } from 'date-fns'
+import { getRevenueMonths } from '@/lib/booking-utils'
 import type { Client, ClientStage, Booking, Billboard, BookingStatus, PaymentStatus } from '@/types/database'
 import { STAGE_CONFIG, BOOKING_STATUS_CONFIG, PAYMENT_STATUS_CONFIG } from '@/types/database'
 import Link from 'next/link'
@@ -96,12 +97,38 @@ export default function ClientDetailPage() {
     e.preventDefault()
     if (!bookingForm.spot_size) { alert('Please select spot size (0.5 or 1)'); return }
     const { _months, ...data } = bookingForm
+    let bookingId: string
     if (editingBookingId) {
       await supabase.from('bookings').update(data).eq('id', editingBookingId)
+      bookingId = editingBookingId
       setEditingBookingId(null)
     } else {
-      await supabase.from('bookings').insert({ ...data, client_id: params.id })
+      const { data: inserted } = await supabase.from('bookings').insert({ ...data, client_id: params.id }).select('id').single()
+      bookingId = inserted!.id
     }
+
+    // Sync profit_sharing records for each revenue month
+    const paymentToProfit: Record<PaymentStatus, string> = {
+      pending_payment: 'pending_payment',
+      received_pending_profit_share: 'waiting_profit_share',
+      settled: 'settled',
+    }
+    const profitStatus = paymentToProfit[data.payment_status]
+    const months = getRevenueMonths(parseISO(data.start_date), data.monthly_rate, data.total_amount)
+    await supabase.from('profit_sharing').delete().eq('booking_id', bookingId)
+    if (months.length > 0) {
+      await supabase.from('profit_sharing').insert(
+        months.map(m => ({
+          booking_id: bookingId,
+          month: format(m, 'yyyy-MM'),
+          amount: data.monthly_rate,
+          status: profitStatus,
+          billboard_id: data.billboard_id,
+          sales_person: data.sales_person || null,
+        }))
+      )
+    }
+
     setShowAddBooking(false)
     setBookingForm({ billboard_id: billboards[0]?.id || '', spot_size: '' as any, start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', notes: '', status: 'upcoming', payment_status: 'pending_payment', _months: 0 })
     load()

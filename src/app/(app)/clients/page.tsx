@@ -22,6 +22,7 @@ export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [search, setSearch] = useState('')
   const [stageFilter, setStageFilter] = useState<ClientStage | 'all'>('all')
+  const [sortBy, setSortBy] = useState<'name-az' | 'name-za' | 'recent' | 'oldest'>('recent')
   const [view, setView] = useState<'list' | 'pipeline'>('list')
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
@@ -49,6 +50,14 @@ export default function ClientsPage() {
     const matchSearch = !search || c.company_name.toLowerCase().includes(search.toLowerCase()) || c.contact_person.toLowerCase().includes(search.toLowerCase())
     const matchStage = stageFilter === 'all' || c.stage === stageFilter
     return matchSearch && matchStage
+  }).sort((a, b) => {
+    switch (sortBy) {
+      case 'name-az': return a.company_name.localeCompare(b.company_name)
+      case 'name-za': return b.company_name.localeCompare(a.company_name)
+      case 'recent': return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+      case 'oldest': return new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
+      default: return 0
+    }
   })
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600" /></div>
@@ -84,12 +93,18 @@ export default function ClientsPage() {
         </Card>
       )}
 
-      {/* Search & filter */}
+      {/* Search & sort */}
       <div className="flex gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input placeholder="Search clients..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        <select className="border rounded-md px-2 py-2 text-sm bg-white min-w-[130px]" value={sortBy} onChange={e => setSortBy(e.target.value as typeof sortBy)}>
+          <option value="recent">Recently Updated</option>
+          <option value="oldest">Oldest</option>
+          <option value="name-az">Name (A-Z)</option>
+          <option value="name-za">Name (Z-A)</option>
+        </select>
       </div>
 
       {/* View toggle & stage filter */}
