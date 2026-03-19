@@ -128,14 +128,14 @@ export default function SalesSummaryPage() {
       </div>
 
       {/* Spreadsheet table */}
-      <div className="overflow-x-auto border rounded-lg bg-white">
+      <div className="overflow-auto border rounded-lg bg-white" style={{ maxHeight: 'calc(100vh - 280px)' }}>
         <table className="min-w-max w-full text-xs">
           <thead>
             <tr className="bg-gray-100 border-b">
-              <th className="sticky left-0 bg-gray-100 z-10 px-3 py-2 text-left font-semibold min-w-[180px]">#</th>
-              <th className="sticky left-[180px] bg-gray-100 z-10 px-3 py-2 text-left font-semibold min-w-[200px]">INCOME</th>
+              <th className="sticky left-0 top-0 bg-gray-100 z-20 px-3 py-2 text-left font-semibold min-w-[180px]">#</th>
+              <th className="sticky left-[180px] top-0 bg-gray-100 z-20 px-3 py-2 text-left font-semibold min-w-[200px]">INCOME</th>
               {months.map(m => (
-                <th key={format(m, 'yyyy-MM')} className={`px-3 py-2 text-right font-semibold min-w-[90px] ${isSameMonth(m, new Date()) ? 'bg-yellow-100' : ''}`}>
+                <th key={format(m, 'yyyy-MM')} className={`sticky top-0 z-[5] px-3 py-2 text-right font-semibold min-w-[90px] ${isSameMonth(m, new Date()) ? 'bg-yellow-100' : 'bg-gray-100'}`}>
                   {format(m, "MMM''yy").toUpperCase()}
                 </th>
               ))}
