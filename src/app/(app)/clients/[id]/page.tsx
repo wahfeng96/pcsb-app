@@ -148,6 +148,7 @@ export default function ClientDetailPage() {
 
   async function deleteBooking(id: string) {
     if (!confirm('Delete this booking?')) return
+    await supabase.from('profit_sharing').delete().eq('booking_id', id)
     await supabase.from('bookings').delete().eq('id', id)
     load()
   }
