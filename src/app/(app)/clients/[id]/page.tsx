@@ -148,8 +148,17 @@ export default function ClientDetailPage() {
 
   async function deleteBooking(id: string) {
     if (!confirm('Delete this booking?')) return
-    await supabase.from('profit_sharing').delete().eq('booking_id', id)
-    await supabase.from('bookings').delete().eq('id', id)
+    const { data: { user } } = await supabase.auth.getUser()
+    const res = await fetch('/api/delete-booking', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bookingId: id, userId: user?.id })
+    })
+    if (!res.ok) {
+      const err = await res.json()
+      alert('Delete failed: ' + (err.error || 'Unknown error'))
+      return
+    }
     load()
   }
 
