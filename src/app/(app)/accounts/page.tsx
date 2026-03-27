@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Download, FileText } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Download, FileText, Lock } from 'lucide-react'
 import { format, startOfMonth, addMonths, subMonths, parseISO, isSameMonth } from 'date-fns'
 import { getRevenueMonths } from '@/lib/booking-utils'
 import type { Billboard, Booking, Client } from '@/types/database'
@@ -14,6 +14,7 @@ import { useRole } from '@/lib/hooks/use-role'
 type BookingWithRefs = Booking & { client: Client; billboard: Billboard }
 type CostItem = { id: string; billboard_id: string; name: string; amount: number; start_month: string | null; end_month: string | null }
 type MonthlyPayment = { id: string; booking_id: string; month: string; amount: number; status: 'pending_invoice' | 'invoice_sent' | 'completed' }
+type ProfitShareRecord = { id: string; booking_id?: string; month: string; status: 'pending_payment' | 'waiting_profit_share' | 'settled' }
 
 const PAYMENT_CYCLE_STATUS: MonthlyPayment['status'][] = ['pending_invoice', 'invoice_sent', 'completed']
 const PAYMENT_STATUS_DISPLAY: Record<string, { label: string; color: string; icon: string }> = {
@@ -40,22 +41,25 @@ export default function AccountsPage() {
   const [bookings, setBookings] = useState<BookingWithRefs[]>([])
   const [costs, setCosts] = useState<CostItem[]>([])
   const [monthlyPayments, setMonthlyPayments] = useState<MonthlyPayment[]>([])
+  const [profitRecords, setProfitRecords] = useState<ProfitShareRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [viewMonth, setViewMonth] = useState(startOfMonth(new Date()))
   const [selectedBb, setSelectedBb] = useState<string>('all')
   const [expandedBookings, setExpandedBookings] = useState<Set<string>>(new Set())
 
   async function load() {
-    const [bb, bk, cs, mp] = await Promise.all([
+    const [bb, bk, cs, mp, pr] = await Promise.all([
       supabase.from('billboards').select('*').order('name'),
       supabase.from('bookings').select('*, client:clients(*), billboard:billboards(*)').order('start_date'),
       supabase.from('billboard_costs').select('*').order('created_at'),
       supabase.from('monthly_payments').select('*'),
+      supabase.from('profit_sharing').select('id, booking_id, month, status'),
     ])
     setBillboards(bb.data || [])
     setBookings(bk.data || [])
     setCosts(cs.data || [])
     setMonthlyPayments(mp.data || [])
+    setProfitRecords(pr.data || [])
     setLoading(false)
   }
 
@@ -79,13 +83,23 @@ export default function AccountsPage() {
     return months.length > 0 ? c.amount / months.length : 0
   }
 
-  // Get or create monthly payment record
+  // Check if profit sharing has been started (waiting or settled) for this booking/month
+  function isProfitShareTriggered(bookingId: string, monthKey: string): boolean {
+    const pr = profitRecords.find(r => r.booking_id === bookingId && r.month === monthKey)
+    return pr?.status === 'waiting_profit_share' || pr?.status === 'settled'
+  }
+
+  // Get payment status — auto "completed" if profit sharing is waiting/settled
   function getPaymentStatus(bookingId: string, monthKey: string): MonthlyPayment['status'] {
+    if (isProfitShareTriggered(bookingId, monthKey)) return 'completed'
     const existing = monthlyPayments.find(p => p.booking_id === bookingId && p.month === monthKey)
     return existing?.status || 'pending_invoice'
   }
 
   async function cyclePaymentStatus(bookingId: string, monthKey: string, amount: number) {
+    // If profit sharing already triggered, status is locked to completed
+    if (isProfitShareTriggered(bookingId, monthKey)) return
+
     const current = getPaymentStatus(bookingId, monthKey)
     const currentIdx = PAYMENT_CYCLE_STATUS.indexOf(current)
     const next = PAYMENT_CYCLE_STATUS[(currentIdx + 1) % PAYMENT_CYCLE_STATUS.length]
@@ -326,9 +340,11 @@ export default function AccountsPage() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className={`text-[10px] h-7 ${display.color}`}
+                                className={`text-[10px] h-7 ${display.color} ${isProfitShareTriggered(b.id, monthKey) ? 'opacity-70 cursor-not-allowed' : ''}`}
                                 onClick={() => cyclePaymentStatus(b.id, monthKey, b.monthly_rate || 0)}
+                                title={isProfitShareTriggered(b.id, monthKey) ? 'Auto-completed by Profit Sharing' : ''}
                               >
+                                {isProfitShareTriggered(b.id, monthKey) && <Lock className="h-2.5 w-2.5 mr-1" />}
                                 {display.icon} {display.label}
                               </Button>
                             ) : (
@@ -366,9 +382,11 @@ export default function AccountsPage() {
                                       <Button
                                         size="sm"
                                         variant="outline"
-                                        className={`text-[9px] h-6 px-2 ${mDisplay.color}`}
+                                        className={`text-[9px] h-6 px-2 ${mDisplay.color} ${isProfitShareTriggered(b.id, mKey) ? 'opacity-70 cursor-not-allowed' : ''}`}
                                         onClick={() => cyclePaymentStatus(b.id, mKey, b.monthly_rate || 0)}
+                                        title={isProfitShareTriggered(b.id, mKey) ? 'Auto-completed by Profit Sharing' : ''}
                                       >
+                                        {isProfitShareTriggered(b.id, mKey) && <Lock className="h-2.5 w-2.5 mr-1" />}
                                         {mDisplay.icon} {mDisplay.label}
                                       </Button>
                                     ) : (
