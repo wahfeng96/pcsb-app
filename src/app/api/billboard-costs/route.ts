@@ -9,14 +9,25 @@ function getAdmin() {
   )
 }
 
-// Verify user is owner
-async function verifyOwner(supabase: ReturnType<typeof createClient>, userId: string) {
+// Verify user can edit: owner can edit all, team needs can_edit access on that billboard
+async function canEditCosts(supabase: ReturnType<typeof createClient>, userId: string, billboardId?: string) {
   const { data: profile } = await supabase
     .from('profiles')
     .select('role')
     .eq('id', userId)
     .single()
-  return profile?.role === 'owner'
+  if (!profile) return false
+  if (profile.role === 'owner') return true
+  if (profile.role === 'team' && billboardId) {
+    const { data: access } = await supabase
+      .from('user_billboard_access')
+      .select('can_edit')
+      .eq('user_id', userId)
+      .eq('billboard_id', billboardId)
+      .single()
+    return access?.can_edit === true
+  }
+  return false
 }
 
 // Month input gives "2026-03" but Postgres date column needs "2026-03-01"
@@ -33,7 +44,7 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = getAdmin()
-  if (!(await verifyOwner(supabase, userId))) {
+  if (!(await canEditCosts(supabase, userId, billboard_id))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   }
 
@@ -57,7 +68,11 @@ export async function PUT(req: NextRequest) {
   }
 
   const supabase = getAdmin()
-  if (!(await verifyOwner(supabase, userId))) {
+
+  // Look up billboard_id from the cost record for access check
+  const { data: cost } = await supabase.from('billboard_costs').select('billboard_id').eq('id', id).single()
+  if (!cost) return NextResponse.json({ error: 'Cost not found' }, { status: 404 })
+  if (!(await canEditCosts(supabase, userId, cost.billboard_id))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   }
 
@@ -80,7 +95,11 @@ export async function DELETE(req: NextRequest) {
   }
 
   const supabase = getAdmin()
-  if (!(await verifyOwner(supabase, userId))) {
+
+  // Look up billboard_id from the cost record for access check
+  const { data: cost } = await supabase.from('billboard_costs').select('billboard_id').eq('id', id).single()
+  if (!cost) return NextResponse.json({ error: 'Cost not found' }, { status: 404 })
+  if (!(await canEditCosts(supabase, userId, cost.billboard_id))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   }
 

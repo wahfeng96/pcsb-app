@@ -53,6 +53,8 @@ export default function BillboardsPage() {
   const [bookings, setBookings] = useState<(Booking & { client: Client })[]>([])
   const [partners, setPartners] = useState<Profile[]>([])
   const [costs, setCosts] = useState<CostItem[]>([])
+  const [userAccess, setUserAccess] = useState<{ billboard_id: string; can_edit: boolean }[]>([])
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [editingBb, setEditingBb] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({ partner_id: '', profit_share_percent: 0 })
@@ -63,20 +65,32 @@ export default function BillboardsPage() {
   const [bbForm, setBbForm] = useState({ name: '', location: '', max_slots: 15, description: '' })
 
   async function load() {
-    const [bb, bk, pr, cs] = await Promise.all([
+    const [bb, bk, pr, cs, auth] = await Promise.all([
       supabase.from('billboards').select('*').order('name'),
       supabase.from('bookings').select('*, client:clients(*)').order('start_date'),
       supabase.from('profiles').select('*').eq('role', 'partner'),
       supabase.from('billboard_costs').select('*').order('created_at'),
+      supabase.auth.getUser(),
     ])
     setBillboards(bb.data || [])
     setBookings(bk.data || [])
     setPartners(pr.data || [])
     setCosts(cs.data || [])
+    if (auth.data?.user) {
+      setCurrentUserId(auth.data.user.id)
+      const { data: access } = await supabase.from('user_billboard_access').select('billboard_id, can_edit').eq('user_id', auth.data.user.id)
+      setUserAccess(access || [])
+    }
     setLoading(false)
   }
 
   useEffect(() => { load() }, [])
+
+  // Owner can edit all; team users need per-billboard can_edit access
+  function canEditBillboard(bbId: string): boolean {
+    if (canEdit) return true // owner
+    return userAccess.some(a => a.billboard_id === bbId && a.can_edit)
+  }
 
   async function handleAddBillboard(e: React.FormEvent) {
     e.preventDefault()
@@ -333,7 +347,7 @@ export default function BillboardsPage() {
                                       <p className="text-xs font-medium">RM {c.amount.toLocaleString()} total</p>
                                       {thisMonth && <p className="text-[10px] text-orange-600">RM {Math.round(thisMonth.amount).toLocaleString()}/mo</p>}
                                     </div>
-                                    {canEdit && <Button size="icon" variant="ghost" className="h-6 w-6 text-red-400 hover:text-red-600" onClick={() => handleDeleteCost(c.id)}><Trash2 className="h-3 w-3" /></Button>}
+                                    {canEditBillboard(bb.id) && <Button size="icon" variant="ghost" className="h-6 w-6 text-red-400 hover:text-red-600" onClick={() => handleDeleteCost(c.id)}><Trash2 className="h-3 w-3" /></Button>}
                                   </div>
                                 </div>
                               </div>
@@ -342,7 +356,7 @@ export default function BillboardsPage() {
                         </div>
                       )}
                       {/* Add new cost */}
-                      {canEdit && <div className="space-y-2 border-t pt-2">
+                      {canEditBillboard(bb.id) && <div className="space-y-2 border-t pt-2">
                         <p className="text-xs font-medium text-gray-500">Add Cost</p>
                         <div className="flex gap-2">
                           <Input placeholder="Cost name" className="text-sm" value={newCost.name} onChange={e => setNewCost(f => ({ ...f, name: e.target.value }))} />
