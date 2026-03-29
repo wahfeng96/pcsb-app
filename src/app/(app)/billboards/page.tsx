@@ -106,19 +106,36 @@ export default function BillboardsPage() {
 
   async function handleAddCost(bbId: string) {
     if (!newCost.name.trim()) return
-    await supabase.from('billboard_costs').insert({
-      billboard_id: bbId,
-      name: newCost.name,
-      amount: newCost.amount,
-      start_month: newCost.start_month || null,
-      end_month: newCost.end_month || null,
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return alert('Not logged in')
+    const res = await fetch('/api/billboard-costs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: user.id,
+        billboard_id: bbId,
+        name: newCost.name,
+        amount: newCost.amount,
+        start_month: newCost.start_month || null,
+        end_month: newCost.end_month || null,
+      }),
     })
+    const result = await res.json()
+    if (!res.ok) return alert('Error: ' + (result.error || 'Failed to add cost'))
     setNewCost({ name: '', amount: 0, start_month: '', end_month: '' })
     load()
   }
 
   async function handleDeleteCost(costId: string) {
-    await supabase.from('billboard_costs').delete().eq('id', costId)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return alert('Not logged in')
+    const res = await fetch('/api/billboard-costs', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user.id, id: costId }),
+    })
+    const result = await res.json()
+    if (!res.ok) return alert('Error: ' + (result.error || 'Failed to delete cost'))
     load()
   }
 

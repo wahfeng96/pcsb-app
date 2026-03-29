@@ -155,17 +155,23 @@ export default function AccountsPage() {
 
   async function saveCost(bbId: string) {
     if (!costForm.name.trim() || !costForm.amount) return
-    const data = {
-      billboard_id: bbId,
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return alert('Not logged in')
+    const payload: Record<string, unknown> = {
+      userId: user.id,
       name: costForm.name.trim(),
       amount: parseFloat(costForm.amount) || 0,
       start_month: costForm.start_month || null,
       end_month: costForm.end_month || null,
     }
     if (editingCostId) {
-      await supabase.from('billboard_costs').update(data).eq('id', editingCostId)
+      payload.id = editingCostId
+      const res = await fetch('/api/billboard-costs', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      if (!res.ok) { const r = await res.json(); return alert('Error: ' + (r.error || 'Failed')) }
     } else {
-      await supabase.from('billboard_costs').insert(data)
+      payload.billboard_id = bbId
+      const res = await fetch('/api/billboard-costs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      if (!res.ok) { const r = await res.json(); return alert('Error: ' + (r.error || 'Failed')) }
     }
     closeCostForm()
     load()
@@ -173,7 +179,10 @@ export default function AccountsPage() {
 
   async function deleteCost(costId: string) {
     if (!confirm('Delete this cost item?')) return
-    await supabase.from('billboard_costs').delete().eq('id', costId)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return alert('Not logged in')
+    const res = await fetch('/api/billboard-costs', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user.id, id: costId }) })
+    if (!res.ok) { const r = await res.json(); return alert('Error: ' + (r.error || 'Failed')) }
     load()
   }
 
