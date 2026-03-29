@@ -19,6 +19,12 @@ async function verifyOwner(supabase: ReturnType<typeof createClient>, userId: st
   return profile?.role === 'owner'
 }
 
+// Month input gives "2026-03" but Postgres date column needs "2026-03-01"
+function toDate(month: string | null): string | null {
+  if (!month) return null
+  return month.length === 7 ? `${month}-01` : month
+}
+
 // POST = add new cost
 export async function POST(req: NextRequest) {
   const { userId, billboard_id, name, amount, start_month, end_month } = await req.json()
@@ -35,8 +41,8 @@ export async function POST(req: NextRequest) {
     billboard_id,
     name,
     amount: amount || 0,
-    start_month: start_month || null,
-    end_month: end_month || null,
+    start_month: toDate(start_month),
+    end_month: toDate(end_month),
   }).select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -58,8 +64,8 @@ export async function PUT(req: NextRequest) {
   const { error } = await supabase.from('billboard_costs').update({
     name,
     amount: amount || 0,
-    start_month: start_month || null,
-    end_month: end_month || null,
+    start_month: toDate(start_month),
+    end_month: toDate(end_month),
   }).eq('id', id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
