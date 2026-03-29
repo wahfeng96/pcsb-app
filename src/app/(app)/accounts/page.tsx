@@ -5,7 +5,8 @@ import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Download, FileText, Lock } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Download, FileText, Lock, Plus, Pencil, Trash2, X, Check, DollarSign } from 'lucide-react'
+import { Input } from '@/components/ui/input'
 import { format, startOfMonth, addMonths, subMonths, parseISO, isSameMonth } from 'date-fns'
 import { getRevenueMonths } from '@/lib/booking-utils'
 import type { Billboard, Booking, Client } from '@/types/database'
@@ -46,6 +47,10 @@ export default function AccountsPage() {
   const [viewMonth, setViewMonth] = useState(startOfMonth(new Date()))
   const [selectedBb, setSelectedBb] = useState<string>('all')
   const [expandedBookings, setExpandedBookings] = useState<Set<string>>(new Set())
+  const [expandedCosts, setExpandedCosts] = useState<Set<string>>(new Set())
+  const [costFormBb, setCostFormBb] = useState<string | null>(null)
+  const [editingCostId, setEditingCostId] = useState<string | null>(null)
+  const [costForm, setCostForm] = useState({ name: '', amount: '', start_month: '', end_month: '' })
 
   async function load() {
     const [bb, bk, cs, mp, pr] = await Promise.all([
@@ -120,6 +125,56 @@ export default function AccountsPage() {
       else next.add(bookingId)
       return next
     })
+  }
+
+  function toggleCosts(bbId: string) {
+    setExpandedCosts(prev => {
+      const next = new Set(prev)
+      if (next.has(bbId)) next.delete(bbId)
+      else next.add(bbId)
+      return next
+    })
+  }
+
+  function openCostForm(bbId: string, cost?: CostItem) {
+    setCostFormBb(bbId)
+    if (cost) {
+      setEditingCostId(cost.id)
+      setCostForm({ name: cost.name, amount: String(cost.amount), start_month: cost.start_month || '', end_month: cost.end_month || '' })
+    } else {
+      setEditingCostId(null)
+      setCostForm({ name: '', amount: '', start_month: '', end_month: '' })
+    }
+  }
+
+  function closeCostForm() {
+    setCostFormBb(null)
+    setEditingCostId(null)
+    setCostForm({ name: '', amount: '', start_month: '', end_month: '' })
+  }
+
+  async function saveCost(bbId: string) {
+    if (!costForm.name.trim() || !costForm.amount) return
+    const data = {
+      billboard_id: bbId,
+      name: costForm.name.trim(),
+      amount: parseFloat(costForm.amount) || 0,
+      start_month: costForm.start_month || null,
+      end_month: costForm.end_month || null,
+    }
+    if (editingCostId) {
+      await supabase.from('billboard_costs').update(data).eq('id', editingCostId)
+    } else {
+      await supabase.from('billboard_costs').insert(data)
+    }
+    closeCostForm()
+    load()
+  }
+
+  async function deleteCost(costId: string) {
+    if (!confirm('Delete this cost item?')) return
+    await supabase.from('billboard_costs').delete().eq('id', costId)
+    load()
   }
 
   // Per-billboard summary
@@ -401,6 +456,104 @@ export default function AccountsPage() {
                       </div>
                     )
                   })}
+                </div>
+              )}
+              {/* Costs Section */}
+              {canEdit && (
+                <div className="mt-3 border-t pt-3">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <button
+                      className="flex items-center gap-1 text-[10px] text-gray-500 font-medium hover:text-gray-700"
+                      onClick={() => toggleCosts(s.billboard.id)}
+                    >
+                      <DollarSign className="h-3 w-3" />
+                      Costs ({costs.filter(c => c.billboard_id === s.billboard.id).length})
+                      {expandedCosts.has(s.billboard.id) ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    </button>
+                    {expandedCosts.has(s.billboard.id) && (
+                      <Button size="sm" variant="ghost" className="h-6 text-[10px] text-red-600" onClick={() => openCostForm(s.billboard.id)}>
+                        <Plus className="h-3 w-3 mr-0.5" /> Add Cost
+                      </Button>
+                    )}
+                  </div>
+
+                  {expandedCosts.has(s.billboard.id) && (
+                    <div className="space-y-1.5">
+                      {/* Existing cost items */}
+                      {costs.filter(c => c.billboard_id === s.billboard.id).map(c => (
+                        <div key={c.id} className="flex items-center justify-between px-3 py-1.5 bg-orange-50 rounded text-xs">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{c.name}</p>
+                            <p className="text-[10px] text-gray-400">
+                              RM {c.amount.toLocaleString()}
+                              {c.start_month && c.end_month ? ` • ${c.start_month} → ${c.end_month}` : ' • one-time'}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1 ml-2">
+                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openCostForm(s.billboard.id, c)}>
+                              <Pencil className="h-3 w-3 text-gray-400" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => deleteCost(c.id)}>
+                              <Trash2 className="h-3 w-3 text-red-400" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+
+                      {costs.filter(c => c.billboard_id === s.billboard.id).length === 0 && costFormBb !== s.billboard.id && (
+                        <p className="text-[10px] text-gray-400 text-center py-2">No costs added yet</p>
+                      )}
+
+                      {/* Add/Edit Cost Form */}
+                      {costFormBb === s.billboard.id && (
+                        <div className="border rounded-lg p-3 bg-white space-y-2">
+                          <p className="text-xs font-semibold">{editingCostId ? 'Edit Cost' : 'Add Cost'}</p>
+                          <Input
+                            placeholder="Cost name (e.g. Rental, Electricity)"
+                            value={costForm.name}
+                            onChange={e => setCostForm(prev => ({ ...prev, name: e.target.value }))}
+                            className="h-8 text-xs"
+                          />
+                          <Input
+                            type="number"
+                            placeholder="Total amount (RM)"
+                            value={costForm.amount}
+                            onChange={e => setCostForm(prev => ({ ...prev, amount: e.target.value }))}
+                            className="h-8 text-xs"
+                          />
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[10px] text-gray-500">Start Month</label>
+                              <Input
+                                type="month"
+                                value={costForm.start_month}
+                                onChange={e => setCostForm(prev => ({ ...prev, start_month: e.target.value }))}
+                                className="h-8 text-xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-gray-500">End Month</label>
+                              <Input
+                                type="month"
+                                value={costForm.end_month}
+                                onChange={e => setCostForm(prev => ({ ...prev, end_month: e.target.value }))}
+                                className="h-8 text-xs"
+                              />
+                            </div>
+                          </div>
+                          <p className="text-[10px] text-gray-400">Leave months empty for one-time cost (applied to current month only)</p>
+                          <div className="flex gap-2">
+                            <Button size="sm" className="h-7 text-xs bg-red-600 hover:bg-red-700 flex-1" onClick={() => saveCost(s.billboard.id)}>
+                              <Check className="h-3 w-3 mr-1" /> {editingCostId ? 'Update' : 'Save'}
+                            </Button>
+                            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={closeCostForm}>
+                              <X className="h-3 w-3 mr-1" /> Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
