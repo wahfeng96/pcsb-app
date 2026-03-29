@@ -86,7 +86,7 @@ export default function BillboardsPage() {
 
   useEffect(() => { load() }, [])
 
-  // Owner can edit all; team users need per-billboard can_edit access
+  // Owner can edit all; team/partner users need per-billboard can_edit access
   function canEditBillboard(bbId: string): boolean {
     if (canEdit) return true // owner
     return userAccess.some(a => a.billboard_id === bbId && a.can_edit)

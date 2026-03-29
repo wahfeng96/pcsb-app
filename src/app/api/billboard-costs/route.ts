@@ -18,7 +18,7 @@ async function canEditCosts(supabase: ReturnType<typeof createClient>, userId: s
     .single()
   if (!profile) return false
   if (profile.role === 'owner') return true
-  if (profile.role === 'team' && billboardId) {
+  if ((profile.role === 'team' || profile.role === 'partner') && billboardId) {
     const { data: access } = await supabase
       .from('user_billboard_access')
       .select('can_edit')
