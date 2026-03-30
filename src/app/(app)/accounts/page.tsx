@@ -115,6 +115,25 @@ export default function AccountsPage() {
     } else {
       await supabase.from('monthly_payments').insert({ booking_id: bookingId, month: monthKey, amount, status: next })
     }
+
+    // When accounts → completed, auto-update profit sharing → waiting_profit_share
+    if (next === 'completed') {
+      const pr = profitRecords.find(p => p.booking_id === bookingId && p.month === monthKey)
+      if (pr && pr.status === 'pending_payment') {
+        await supabase.from('profit_sharing').update({ status: 'waiting_profit_share' }).eq('id', pr.id)
+      } else if (!pr) {
+        // Create profit_sharing record if it doesn't exist
+        await supabase.from('profit_sharing').insert({ booking_id: bookingId, month: monthKey, amount, status: 'waiting_profit_share' })
+      }
+    }
+    // When accounts cycles back from completed, revert profit sharing → pending_payment
+    if (current === 'completed' && next === 'pending_invoice') {
+      const pr = profitRecords.find(p => p.booking_id === bookingId && p.month === monthKey)
+      if (pr && pr.status === 'waiting_profit_share') {
+        await supabase.from('profit_sharing').update({ status: 'pending_payment' }).eq('id', pr.id)
+      }
+    }
+
     load()
   }
 
