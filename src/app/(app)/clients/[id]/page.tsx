@@ -96,16 +96,30 @@ export default function ClientDetailPage() {
   async function handleAddBooking(e: React.FormEvent) {
     e.preventDefault()
     if (!bookingForm.spot_size) { alert('Please select spot size (0.5 or 1)'); return }
-    const { _months, ...data } = bookingForm
+    const { _months, commission_percent, ...bookingData } = bookingForm
+    // commission_percent is stored separately — column may not exist yet
+    const data = { ...bookingData, commission_percent: commission_percent || 0 }
     let bookingId: string
-    if (editingBookingId) {
-      await supabase.from('bookings').update(data).eq('id', editingBookingId)
-      bookingId = editingBookingId
-      setEditingBookingId(null)
-    } else {
-      const { data: inserted } = await supabase.from('bookings').insert({ ...data, client_id: params.id }).select('id').single()
-      bookingId = inserted!.id
-    }
+    try {
+      if (editingBookingId) {
+        const res = await supabase.from('bookings').update(data).eq('id', editingBookingId)
+        if (res.error) {
+          // Retry without commission_percent if column doesn't exist
+          if (res.error.message.includes('commission_percent')) {
+            await supabase.from('bookings').update(bookingData).eq('id', editingBookingId)
+          } else { alert('Error: ' + res.error.message); return }
+        }
+        bookingId = editingBookingId
+        setEditingBookingId(null)
+      } else {
+        let res = await supabase.from('bookings').insert({ ...data, client_id: params.id }).select('id').single()
+        if (res.error && res.error.message.includes('commission_percent')) {
+          res = await supabase.from('bookings').insert({ ...bookingData, client_id: params.id }).select('id').single()
+        }
+        if (res.error) { alert('Error: ' + res.error.message); return }
+        bookingId = res.data!.id
+      }
+    } catch (err: any) { alert('Error saving booking: ' + err.message); return }
 
     // Sync profit_sharing records for each revenue month
     const paymentToProfit: Record<PaymentStatus, string> = {
@@ -129,26 +143,27 @@ export default function ClientDetailPage() {
       )
     }
 
-    // Sync commission records
-    if (data.commission_percent > 0 && months.length > 0) {
-      // Preserve settled commission records
-      const { data: existingComm } = await supabase.from('commissions').select('month, status').eq('booking_id', bookingId)
-      const settledMonths = new Set((existingComm || []).filter((c: any) => c.status === 'settled').map((c: any) => c.month))
+    // Sync commission records (non-blocking — table may not exist yet)
+    try {
+      if (commission_percent > 0 && months.length > 0) {
+        const { data: existingComm } = await supabase.from('commissions').select('month, status').eq('booking_id', bookingId)
+        const settledMonths = new Set((existingComm || []).filter((c: any) => c.status === 'settled').map((c: any) => c.month))
 
-      await supabase.from('commissions').delete().eq('booking_id', bookingId)
-      const commAmt = data.monthly_rate * data.commission_percent / 100
-      await supabase.from('commissions').insert(
-        months.map(m => {
-          const mKey = format(m, 'yyyy-MM')
-          let commStatus = 'pending_payment'
-          if (settledMonths.has(mKey)) commStatus = 'settled'
-          else if (data.payment_status !== 'pending_payment') commStatus = 'waiting_to_be_paid'
-          return { booking_id: bookingId, month: mKey, amount: commAmt, status: commStatus }
-        })
-      )
-    } else {
-      await supabase.from('commissions').delete().eq('booking_id', bookingId)
-    }
+        await supabase.from('commissions').delete().eq('booking_id', bookingId)
+        const commAmt = data.monthly_rate * commission_percent / 100
+        await supabase.from('commissions').insert(
+          months.map(m => {
+            const mKey = format(m, 'yyyy-MM')
+            let commStatus = 'pending_payment'
+            if (settledMonths.has(mKey)) commStatus = 'settled'
+            else if (data.payment_status !== 'pending_payment') commStatus = 'waiting_to_be_paid'
+            return { booking_id: bookingId, month: mKey, amount: commAmt, status: commStatus }
+          })
+        )
+      } else {
+        await supabase.from('commissions').delete().eq('booking_id', bookingId)
+      }
+    } catch { /* commissions table may not exist yet */ }
 
     setShowAddBooking(false)
     setBookingForm({ billboard_id: billboards[0]?.id || '', spot_size: '' as any, start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', commission_percent: 0, notes: '', status: 'upcoming', payment_status: 'pending_payment', _months: 0 })
