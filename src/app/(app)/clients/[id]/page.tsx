@@ -363,7 +363,7 @@ export default function ClientDetailPage() {
               </div>
               <div>
                 <Label>Commission %</Label>
-                <Input type="number" min={0} max={100} step={0.5} placeholder="e.g. 15" value={bookingForm.commission_percent || ''} onChange={e => setBookingForm(f => ({ ...f, commission_percent: +e.target.value }))} />
+                <Input type="number" min={0} max={100} step={0.01} placeholder="e.g. 19.25" value={bookingForm.commission_percent || ''} onChange={e => setBookingForm(f => ({ ...f, commission_percent: +e.target.value }))} />
                 {bookingForm.commission_percent > 0 && bookingForm.monthly_rate > 0 && (
                   <p className="text-[10px] text-gray-400 mt-0.5">Commission: RM {(bookingForm.monthly_rate * bookingForm.commission_percent / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mo</p>
                 )}
