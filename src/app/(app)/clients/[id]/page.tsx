@@ -118,18 +118,18 @@ export default function ClientDetailPage() {
       received_pending_profit_share: 'waiting_profit_share',
       settled: 'settled',
     }
-    const profitStatus = paymentToProfit[data.payment_status]
-    const months = getRevenueMonths(parseISO(data.start_date), data.monthly_rate, data.total_amount)
+    const profitStatus = paymentToProfit[bookingData.payment_status]
+    const months = getRevenueMonths(parseISO(bookingData.start_date), bookingData.monthly_rate, bookingData.total_amount)
     await supabase.from('profit_sharing').delete().eq('booking_id', bookingId)
     if (months.length > 0) {
       await supabase.from('profit_sharing').insert(
         months.map(m => ({
           booking_id: bookingId,
           month: format(m, 'yyyy-MM'),
-          amount: data.monthly_rate,
+          amount: bookingData.monthly_rate,
           status: profitStatus,
-          billboard_id: data.billboard_id,
-          sales_person: data.sales_person || null,
+          billboard_id: bookingData.billboard_id,
+          sales_person: bookingData.sales_person || null,
         }))
       )
     }
@@ -141,13 +141,13 @@ export default function ClientDetailPage() {
         const settledMonths = new Set((existingComm || []).filter((c: any) => c.status === 'settled').map((c: any) => c.month))
 
         await supabase.from('commissions').delete().eq('booking_id', bookingId)
-        const commAmt = data.monthly_rate * commission_percent / 100
+        const commAmt = bookingData.monthly_rate * commission_percent / 100
         await supabase.from('commissions').insert(
           months.map(m => {
             const mKey = format(m, 'yyyy-MM')
             let commStatus = 'pending_payment'
             if (settledMonths.has(mKey)) commStatus = 'settled'
-            else if (data.payment_status !== 'pending_payment') commStatus = 'waiting_to_be_paid'
+            else if (bookingData.payment_status !== 'pending_payment') commStatus = 'waiting_to_be_paid'
             return { booking_id: bookingId, month: mKey, amount: commAmt, status: commStatus }
           })
         )
