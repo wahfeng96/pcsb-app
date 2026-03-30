@@ -44,6 +44,7 @@ export default function ClientDetailPage() {
   const [filterYear, setFilterYear] = useState(new Date().getFullYear())
   const [filterMonth, setFilterMonth] = useState<number | 'all'>('all')
   const [filterBrand, setFilterBrand] = useState<string>('all')
+  const [brandSearch, setBrandSearch] = useState('')
   const bookingFormRef = useRef<HTMLDivElement>(null)
 
   async function load() {
@@ -274,13 +275,24 @@ export default function ClientDetailPage() {
             <Button key={m} size="sm" variant={filterMonth === i ? 'default' : 'outline'} onClick={() => setFilterMonth(i)} className={`text-[10px] h-6 px-2 ${filterMonth === i ? 'bg-red-600 hover:bg-red-700' : ''}`}>{m}</Button>
           ))}
         </div>
+        <div className="relative">
+          <Input
+            placeholder="🔍 Search brand name..."
+            value={brandSearch}
+            onChange={e => { setBrandSearch(e.target.value); setFilterBrand('all') }}
+            className="h-7 text-xs"
+          />
+          {brandSearch && (
+            <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" onClick={() => setBrandSearch('')}><X className="h-3.5 w-3.5" /></button>
+          )}
+        </div>
         {(() => {
           const brands = [...new Set(bookings.map(b => b.brand_name).filter(Boolean))].sort() as string[]
-          return brands.length > 0 ? (
+          return !brandSearch && brands.length > 0 ? (
             <div className="flex gap-1 overflow-x-auto pb-1">
               <Button size="sm" variant={filterBrand === 'all' ? 'default' : 'outline'} onClick={() => setFilterBrand('all')} className={`text-[10px] h-6 px-2 ${filterBrand === 'all' ? 'bg-red-600 hover:bg-red-700' : ''}`}>All Brands</Button>
               {brands.map(brand => (
-                <Button key={brand} size="sm" variant={filterBrand === brand ? 'default' : 'outline'} onClick={() => setFilterBrand(brand)} className={`text-[10px] h-6 px-2 whitespace-nowrap ${filterBrand === brand ? 'bg-red-600 hover:bg-red-700' : ''}`}>{brand}</Button>
+                <Button key={brand} size="sm" variant={filterBrand === brand ? 'default' : 'outline'} onClick={() => { setFilterBrand(brand); setBrandSearch('') }} className={`text-[10px] h-6 px-2 whitespace-nowrap ${filterBrand === brand ? 'bg-red-600 hover:bg-red-700' : ''}`}>{brand}</Button>
               ))}
             </div>
           ) : null
@@ -390,8 +402,10 @@ export default function ClientDetailPage() {
       <div className="space-y-2">
         {(() => {
           const filtered = bookings.filter(b => {
-            // Brand filter
-            if (filterBrand !== 'all' && b.brand_name !== filterBrand) return false
+            // Brand filter (search or button)
+            if (brandSearch) {
+              if (!b.brand_name?.toLowerCase().includes(brandSearch.toLowerCase())) return false
+            } else if (filterBrand !== 'all' && b.brand_name !== filterBrand) return false
             if (filterMonth === 'all') {
               const bStart = parseISO(b.start_date)
               const bEnd = parseISO(b.end_date)
