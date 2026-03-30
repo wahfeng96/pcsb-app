@@ -43,6 +43,7 @@ export default function ClientDetailPage() {
   const [showSalesSuggestions, setShowSalesSuggestions] = useState(false)
   const [filterYear, setFilterYear] = useState(new Date().getFullYear())
   const [filterMonth, setFilterMonth] = useState<number | 'all'>('all')
+  const [filterBrand, setFilterBrand] = useState<string>('all')
   const bookingFormRef = useRef<HTMLDivElement>(null)
 
   async function load() {
@@ -273,6 +274,17 @@ export default function ClientDetailPage() {
             <Button key={m} size="sm" variant={filterMonth === i ? 'default' : 'outline'} onClick={() => setFilterMonth(i)} className={`text-[10px] h-6 px-2 ${filterMonth === i ? 'bg-red-600 hover:bg-red-700' : ''}`}>{m}</Button>
           ))}
         </div>
+        {(() => {
+          const brands = [...new Set(bookings.map(b => b.brand_name).filter(Boolean))].sort() as string[]
+          return brands.length > 0 ? (
+            <div className="flex gap-1 overflow-x-auto pb-1">
+              <Button size="sm" variant={filterBrand === 'all' ? 'default' : 'outline'} onClick={() => setFilterBrand('all')} className={`text-[10px] h-6 px-2 ${filterBrand === 'all' ? 'bg-red-600 hover:bg-red-700' : ''}`}>All Brands</Button>
+              {brands.map(brand => (
+                <Button key={brand} size="sm" variant={filterBrand === brand ? 'default' : 'outline'} onClick={() => setFilterBrand(brand)} className={`text-[10px] h-6 px-2 whitespace-nowrap ${filterBrand === brand ? 'bg-red-600 hover:bg-red-700' : ''}`}>{brand}</Button>
+              ))}
+            </div>
+          ) : null
+        })()}
       </div>
 
       {showAddBooking && (
@@ -378,13 +390,13 @@ export default function ClientDetailPage() {
       <div className="space-y-2">
         {(() => {
           const filtered = bookings.filter(b => {
+            // Brand filter
+            if (filterBrand !== 'all' && b.brand_name !== filterBrand) return false
             if (filterMonth === 'all') {
-              // Year filter only: booking overlaps with the selected year
               const bStart = parseISO(b.start_date)
               const bEnd = parseISO(b.end_date)
               return bStart.getFullYear() <= filterYear && bEnd.getFullYear() >= filterYear
             }
-            // Month+year filter: booking overlaps with selected month
             const filterStart = new Date(filterYear, filterMonth, 1)
             const filterEnd = endOfMonth(filterStart)
             const bStart = parseISO(b.start_date)
