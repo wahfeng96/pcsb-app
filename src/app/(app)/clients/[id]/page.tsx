@@ -97,29 +97,20 @@ export default function ClientDetailPage() {
     e.preventDefault()
     if (!bookingForm.spot_size) { alert('Please select spot size (0.5 or 1)'); return }
     const { _months, commission_percent, ...bookingData } = bookingForm
-    // commission_percent is stored separately — column may not exist yet
-    const data = { ...bookingData, commission_percent: commission_percent || 0 }
     let bookingId: string
-    try {
-      if (editingBookingId) {
-        const res = await supabase.from('bookings').update(data).eq('id', editingBookingId)
-        if (res.error) {
-          // Retry without commission_percent if column doesn't exist
-          if (res.error.message.includes('commission_percent')) {
-            await supabase.from('bookings').update(bookingData).eq('id', editingBookingId)
-          } else { alert('Error: ' + res.error.message); return }
-        }
-        bookingId = editingBookingId
-        setEditingBookingId(null)
-      } else {
-        let res = await supabase.from('bookings').insert({ ...data, client_id: params.id }).select('id').single()
-        if (res.error && res.error.message.includes('commission_percent')) {
-          res = await supabase.from('bookings').insert({ ...bookingData, client_id: params.id }).select('id').single()
-        }
-        if (res.error) { alert('Error: ' + res.error.message); return }
-        bookingId = res.data!.id
-      }
-    } catch (err: any) { alert('Error saving booking: ' + err.message); return }
+    if (editingBookingId) {
+      await supabase.from('bookings').update(bookingData).eq('id', editingBookingId)
+      bookingId = editingBookingId
+      setEditingBookingId(null)
+    } else {
+      const { data: inserted, error } = await supabase.from('bookings').insert({ ...bookingData, client_id: params.id }).select('id').single()
+      if (error) { alert('Error: ' + error.message); return }
+      bookingId = inserted!.id
+    }
+    // Try to save commission_percent separately (column may not exist yet)
+    if (commission_percent > 0) {
+      await supabase.from('bookings').update({ commission_percent }).eq('id', bookingId)
+    }
 
     // Sync profit_sharing records for each revenue month
     const paymentToProfit: Record<PaymentStatus, string> = {
