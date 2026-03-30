@@ -100,21 +100,19 @@ export default function ClientDetailPage() {
   async function handleAddBooking(e: React.FormEvent) {
     e.preventDefault()
     if (!bookingForm.spot_size) { alert('Please select spot size (0.5 or 1)'); return }
-    const { _months, commission_percent, ...bookingData } = bookingForm
+    const { _months, ...bookingDataWithCommission } = bookingForm
+    const commission_percent = bookingDataWithCommission.commission_percent || 0
     let bookingId: string
     if (editingBookingId) {
-      await supabase.from('bookings').update(bookingData).eq('id', editingBookingId)
+      await supabase.from('bookings').update(bookingDataWithCommission).eq('id', editingBookingId)
       bookingId = editingBookingId
       setEditingBookingId(null)
     } else {
-      const { data: inserted, error } = await supabase.from('bookings').insert({ ...bookingData, client_id: params.id }).select('id').single()
+      const { data: inserted, error } = await supabase.from('bookings').insert({ ...bookingDataWithCommission, client_id: params.id }).select('id').single()
       if (error) { alert('Error: ' + error.message); return }
       bookingId = inserted!.id
     }
-    // Try to save commission_percent separately (column may not exist yet)
-    if (commission_percent > 0) {
-      await supabase.from('bookings').update({ commission_percent }).eq('id', bookingId)
-    }
+    const bookingData = bookingDataWithCommission
 
     // Sync profit_sharing records for each revenue month
     const paymentToProfit: Record<PaymentStatus, string> = {
