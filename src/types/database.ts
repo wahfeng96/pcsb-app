@@ -2,6 +2,7 @@ export type UserRole = 'owner' | 'team' | 'partner'
 export type ClientStage = 'inquiry' | 'quotation' | 'bo' | 'scheduled' | 'live' | 'completed' | 'cancelled'
 export type BookingStatus = 'upcoming' | 'live' | 'completed' | 'cancelled'
 export type PaymentStatus = 'pending_payment' | 'received_pending_profit_share' | 'settled'
+export type CommissionStatus = 'pending_payment' | 'waiting_to_be_paid' | 'settled'
 
 export interface Billboard {
   id: string
@@ -57,6 +58,7 @@ export interface Booking {
   spot_size: number
   brand_name: string | null
   sales_person: string | null
+  commission_percent: number
   notes: string | null
   created_at: string
   // joined
@@ -89,6 +91,12 @@ export const PAYMENT_STATUS_CONFIG: Record<PaymentStatus, { label: string; color
   pending_payment: { label: 'Pending Payment', color: 'bg-red-100 text-red-800' },
   received_pending_profit_share: { label: 'Received (Pending Profit Share)', color: 'bg-yellow-100 text-yellow-800' },
   settled: { label: 'Settled', color: 'bg-green-100 text-green-800' },
+}
+
+export const COMMISSION_STATUS_CONFIG: Record<CommissionStatus, { label: string; color: string; icon: string }> = {
+  pending_payment: { label: 'Pending Payment', color: 'bg-yellow-100 text-yellow-700 border-yellow-300', icon: '💰' },
+  waiting_to_be_paid: { label: 'Waiting to be Paid', color: 'bg-orange-100 text-orange-700 border-orange-300', icon: '⏳' },
+  settled: { label: 'Settled', color: 'bg-green-100 text-green-700 border-green-300', icon: '✅' },
 }
 
 export const BOOKING_STATUS_CONFIG: Record<BookingStatus, { label: string; color: string }> = {

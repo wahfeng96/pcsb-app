@@ -32,7 +32,7 @@ export default function ClientDetailPage() {
   const [editingBookingId, setEditingBookingId] = useState<string | null>(null)
   const [form, setForm] = useState<Partial<Client>>({})
   const [bookingForm, setBookingForm] = useState({
-    billboard_id: '', spot_size: '' as any, start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', notes: '',
+    billboard_id: '', spot_size: '' as any, start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', commission_percent: 0, notes: '',
     status: 'upcoming' as BookingStatus, payment_status: 'pending_payment' as PaymentStatus,
     _months: 0,
   })
@@ -129,8 +129,29 @@ export default function ClientDetailPage() {
       )
     }
 
+    // Sync commission records
+    if (data.commission_percent > 0 && months.length > 0) {
+      // Preserve settled commission records
+      const { data: existingComm } = await supabase.from('commissions').select('month, status').eq('booking_id', bookingId)
+      const settledMonths = new Set((existingComm || []).filter((c: any) => c.status === 'settled').map((c: any) => c.month))
+
+      await supabase.from('commissions').delete().eq('booking_id', bookingId)
+      const commAmt = data.monthly_rate * data.commission_percent / 100
+      await supabase.from('commissions').insert(
+        months.map(m => {
+          const mKey = format(m, 'yyyy-MM')
+          let commStatus = 'pending_payment'
+          if (settledMonths.has(mKey)) commStatus = 'settled'
+          else if (data.payment_status !== 'pending_payment') commStatus = 'waiting_to_be_paid'
+          return { booking_id: bookingId, month: mKey, amount: commAmt, status: commStatus }
+        })
+      )
+    } else {
+      await supabase.from('commissions').delete().eq('booking_id', bookingId)
+    }
+
     setShowAddBooking(false)
-    setBookingForm({ billboard_id: billboards[0]?.id || '', spot_size: '' as any, start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', notes: '', status: 'upcoming', payment_status: 'pending_payment', _months: 0 })
+    setBookingForm({ billboard_id: billboards[0]?.id || '', spot_size: '' as any, start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', commission_percent: 0, notes: '', status: 'upcoming', payment_status: 'pending_payment', _months: 0 })
     load()
   }
 
@@ -138,7 +159,7 @@ export default function ClientDetailPage() {
     setBookingForm({
       billboard_id: b.billboard_id, spot_size: b.spot_size || 1, start_date: b.start_date, end_date: b.end_date,
       monthly_rate: b.monthly_rate, _months: b.monthly_rate ? Math.round(b.total_amount / b.monthly_rate) : calcMonths(b.start_date, b.end_date), total_amount: b.total_amount, slot_number: b.slot_number,
-      brand_name: b.brand_name || '', sales_person: b.sales_person || '', notes: b.notes || '',
+      brand_name: b.brand_name || '', sales_person: b.sales_person || '', commission_percent: b.commission_percent || 0, notes: b.notes || '',
       status: b.status, payment_status: b.payment_status,
     })
     setEditingBookingId(b.id)
@@ -295,6 +316,13 @@ export default function ClientDetailPage() {
                   })()
                 )}
               </div>
+              <div>
+                <Label>Commission %</Label>
+                <Input type="number" min={0} max={100} step={0.5} placeholder="e.g. 15" value={bookingForm.commission_percent || ''} onChange={e => setBookingForm(f => ({ ...f, commission_percent: +e.target.value }))} />
+                {bookingForm.commission_percent > 0 && bookingForm.monthly_rate > 0 && (
+                  <p className="text-[10px] text-gray-400 mt-0.5">Commission: RM {(bookingForm.monthly_rate * bookingForm.commission_percent / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mo</p>
+                )}
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Start Date (In)</Label><Input type="date" value={bookingForm.start_date} onChange={e => setBookingForm(f => recalcTotal(f, { start_date: e.target.value }))} required /></div>
                 <div><Label>End Date (Out)</Label><Input type="date" value={bookingForm.end_date} onChange={e => setBookingForm(f => recalcTotal(f, { end_date: e.target.value }))} required /></div>
@@ -341,7 +369,7 @@ export default function ClientDetailPage() {
               </div>
               {b.brand_name && <p className="text-xs font-medium text-gray-700">Brand: {b.brand_name}</p>}
               <span className="text-[10px] text-gray-400">{b.spot_size === 0.5 ? 'Half Spot' : 'Full Spot'}</span>
-              {b.sales_person && <p className="text-xs text-gray-500">Sales: {b.sales_person}</p>}
+              {b.sales_person && <p className="text-xs text-gray-500">Sales: {b.sales_person}{b.commission_percent ? ` • ${b.commission_percent}% commission` : ''}</p>}
               <p className="text-xs text-gray-500">
                 Slot #{b.slot_number} • {format(parseISO(b.start_date), 'dd MMM yyyy')} → {format(parseISO(b.end_date), 'dd MMM yyyy')}
               </p>
