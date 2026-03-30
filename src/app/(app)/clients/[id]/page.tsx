@@ -9,8 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { ArrowLeft, Edit2, Plus, Trash2, Phone, Mail, MapPin, X } from 'lucide-react'
-import { format, parseISO, differenceInMonths, startOfMonth } from 'date-fns'
+import { ArrowLeft, Edit2, Plus, Trash2, Phone, Mail, MapPin, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { format, parseISO, differenceInMonths, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns'
 import { getRevenueMonths } from '@/lib/booking-utils'
 import type { Client, ClientStage, Booking, Billboard, BookingStatus, PaymentStatus } from '@/types/database'
 import { STAGE_CONFIG, BOOKING_STATUS_CONFIG, PAYMENT_STATUS_CONFIG } from '@/types/database'
@@ -41,6 +41,8 @@ export default function ClientDetailPage() {
   const [allSalesPersons, setAllSalesPersons] = useState<string[]>([])
   const [showBrandSuggestions, setShowBrandSuggestions] = useState(false)
   const [showSalesSuggestions, setShowSalesSuggestions] = useState(false)
+  const [filterYear, setFilterYear] = useState(new Date().getFullYear())
+  const [filterMonth, setFilterMonth] = useState<number | 'all'>('all')
   const bookingFormRef = useRef<HTMLDivElement>(null)
 
   async function load() {
@@ -258,6 +260,21 @@ export default function ClientDetailPage() {
         {canEdit && <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => { setShowAddBooking(!showAddBooking); if (showAddBooking) { setEditingBookingId(null); setBookingForm({ billboard_id: billboards[0]?.id || '', spot_size: '' as any, start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', notes: '', status: 'upcoming', payment_status: 'pending_payment', _months: 0 }) } }}>{showAddBooking ? <><X className="h-4 w-4 mr-1" /> Cancel</> : <><Plus className="h-4 w-4 mr-1" /> Add Booking</>}</Button>}
       </div>
 
+      {/* Year/Month filter */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => setFilterYear(y => y - 1)}><ChevronLeft className="h-3.5 w-3.5" /></Button>
+          <span className="text-sm font-semibold min-w-[40px] text-center">{filterYear}</span>
+          <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => setFilterYear(y => y + 1)}><ChevronRight className="h-3.5 w-3.5" /></Button>
+        </div>
+        <div className="flex gap-1 overflow-x-auto pb-1">
+          <Button size="sm" variant={filterMonth === 'all' ? 'default' : 'outline'} onClick={() => setFilterMonth('all')} className={`text-[10px] h-6 px-2 ${filterMonth === 'all' ? 'bg-red-600 hover:bg-red-700' : ''}`}>All</Button>
+          {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, i) => (
+            <Button key={m} size="sm" variant={filterMonth === i ? 'default' : 'outline'} onClick={() => setFilterMonth(i)} className={`text-[10px] h-6 px-2 ${filterMonth === i ? 'bg-red-600 hover:bg-red-700' : ''}`}>{m}</Button>
+          ))}
+        </div>
+      </div>
+
       {showAddBooking && (
         <Card ref={bookingFormRef}>
           <CardContent className="p-4">
@@ -359,9 +376,24 @@ export default function ClientDetailPage() {
       )}
 
       <div className="space-y-2">
-        {bookings.length === 0 ? (
-          <Card><CardContent className="p-4 text-center text-gray-500 text-sm">No bookings yet</CardContent></Card>
-        ) : bookings.map(b => (
+        {(() => {
+          const filtered = bookings.filter(b => {
+            if (filterMonth === 'all') {
+              // Year filter only: booking overlaps with the selected year
+              const bStart = parseISO(b.start_date)
+              const bEnd = parseISO(b.end_date)
+              return bStart.getFullYear() <= filterYear && bEnd.getFullYear() >= filterYear
+            }
+            // Month+year filter: booking overlaps with selected month
+            const filterStart = new Date(filterYear, filterMonth, 1)
+            const filterEnd = endOfMonth(filterStart)
+            const bStart = parseISO(b.start_date)
+            const bEnd = parseISO(b.end_date)
+            return bStart <= filterEnd && bEnd >= filterStart
+          })
+          return filtered.length === 0 ? (
+          <Card><CardContent className="p-4 text-center text-gray-500 text-sm">{bookings.length === 0 ? 'No bookings yet' : 'No bookings for this period'}</CardContent></Card>
+        ) : filtered.map(b => (
           <Card key={b.id}>
             <CardContent className="p-3">
               <div className="flex items-center justify-between mb-1">
@@ -384,7 +416,8 @@ export default function ClientDetailPage() {
               </p>
             </CardContent>
           </Card>
-        ))}
+        ))
+        })()}
       </div>
     </div>
   )
