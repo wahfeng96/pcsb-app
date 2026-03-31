@@ -374,11 +374,21 @@ export default function ClientDetailPage() {
                 <div><Label>Start Date (In)</Label><Input type="date" value={bookingForm.start_date} onChange={e => setBookingForm(f => recalcTotal(f, { start_date: e.target.value }))} required /></div>
                 <div><Label>End Date (Out)</Label><Input type="date" value={bookingForm.end_date} onChange={e => setBookingForm(f => recalcTotal(f, { end_date: e.target.value }))} required /></div>
               </div>
+              <div className="flex items-center gap-2 mb-1">
+                <input type="checkbox" id="foc" checked={bookingForm.monthly_rate === 0 && bookingForm.total_amount === 0} onChange={e => {
+                  if (e.target.checked) setBookingForm(f => ({ ...f, monthly_rate: 0, total_amount: 0 }))
+                }} className="rounded border-gray-300" />
+                <Label htmlFor="foc" className="text-xs text-gray-600 cursor-pointer">FOC (Free of Charge)</Label>
+              </div>
+              {bookingForm.monthly_rate === 0 && bookingForm.total_amount === 0 ? (
+                <div className="bg-gray-50 border rounded-md p-3 text-center text-sm text-gray-500">FOC — No charge</div>
+              ) : (
               <div className="grid grid-cols-3 gap-3">
                 <div><Label>Monthly Rate (RM)</Label><Input type="number" value={bookingForm.monthly_rate || ''} onChange={e => setBookingForm(f => recalcTotal(f, { monthly_rate: +e.target.value }))} /></div>
                 <div><Label>Months</Label><Input type="number" min={1} value={bookingForm._months || ''} onChange={e => setBookingForm(f => recalcTotal(f, { _months: +e.target.value } as any))} /></div>
                 <div><Label>Total (RM)</Label><Input type="number" value={bookingForm.total_amount || ''} readOnly className="bg-gray-50" /></div>
               </div>
+              )}
               <div><Label>Slot Number</Label><Input type="number" min={1} max={15} value={bookingForm.slot_number} onChange={e => setBookingForm(f => ({ ...f, slot_number: +e.target.value }))} /></div>
               <div><Label>Payment Status</Label>
                 <select className="w-full border rounded-md px-3 py-2 text-sm" value={bookingForm.payment_status} onChange={e => setBookingForm(f => ({ ...f, payment_status: e.target.value as PaymentStatus }))}>
