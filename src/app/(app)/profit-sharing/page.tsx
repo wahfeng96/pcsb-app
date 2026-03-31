@@ -98,6 +98,31 @@ export default function ProfitSharingPage() {
       alert('Error: ' + result.error.message)
       return
     }
+    // Auto-sync commission when profit sharing → waiting_profit_share
+    if (next === 'waiting_profit_share') {
+      try {
+        const { data: commRec } = await supabase.from('commissions').select('id, status').eq('booking_id', bookingId).eq('month', monthKey).single()
+        if (commRec && commRec.status === 'pending_payment') {
+          await supabase.from('commissions').update({ status: 'waiting_to_be_paid' }).eq('id', commRec.id)
+        } else if (!commRec) {
+          const { data: bk } = await supabase.from('bookings').select('monthly_rate, commission_percent').eq('id', bookingId).single()
+          if (bk && bk.commission_percent > 0) {
+            const commAmt = bk.monthly_rate * bk.commission_percent / 100
+            await supabase.from('commissions').insert({ booking_id: bookingId, month: monthKey, amount: commAmt, status: 'waiting_to_be_paid' })
+          }
+        }
+      } catch { /* commissions table may not exist */ }
+    }
+    // Revert commission when profit sharing → pending_payment
+    if (next === 'pending_payment') {
+      try {
+        const { data: commRec } = await supabase.from('commissions').select('id, status').eq('booking_id', bookingId).eq('month', monthKey).single()
+        if (commRec && commRec.status === 'waiting_to_be_paid') {
+          await supabase.from('commissions').update({ status: 'pending_payment' }).eq('id', commRec.id)
+        }
+      } catch { /* commissions table may not exist */ }
+    }
+
     // Optimistic update
     setProfitRecords(prev => {
       if (existing) {

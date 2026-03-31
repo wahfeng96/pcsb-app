@@ -122,9 +122,21 @@ export default function AccountsPage() {
       if (pr && pr.status === 'pending_payment') {
         await supabase.from('profit_sharing').update({ status: 'waiting_profit_share' }).eq('id', pr.id)
       } else if (!pr) {
-        // Create profit_sharing record if it doesn't exist
         await supabase.from('profit_sharing').insert({ booking_id: bookingId, month: monthKey, amount, status: 'waiting_profit_share' })
       }
+      // Auto-sync commission → waiting_to_be_paid
+      try {
+        const { data: commRec } = await supabase.from('commissions').select('id, status').eq('booking_id', bookingId).eq('month', monthKey).single()
+        if (commRec && commRec.status === 'pending_payment') {
+          await supabase.from('commissions').update({ status: 'waiting_to_be_paid' }).eq('id', commRec.id)
+        } else if (!commRec) {
+          const { data: bk } = await supabase.from('bookings').select('monthly_rate, commission_percent').eq('id', bookingId).single()
+          if (bk && bk.commission_percent > 0) {
+            const commAmt = bk.monthly_rate * bk.commission_percent / 100
+            await supabase.from('commissions').insert({ booking_id: bookingId, month: monthKey, amount: commAmt, status: 'waiting_to_be_paid' })
+          }
+        }
+      } catch { /* commissions table may not exist */ }
     }
     // When accounts cycles back from completed, revert profit sharing → pending_payment
     if (current === 'completed' && next === 'pending_invoice') {
@@ -132,6 +144,13 @@ export default function AccountsPage() {
       if (pr && pr.status === 'waiting_profit_share') {
         await supabase.from('profit_sharing').update({ status: 'pending_payment' }).eq('id', pr.id)
       }
+      // Revert commission → pending_payment
+      try {
+        const { data: commRec } = await supabase.from('commissions').select('id, status').eq('booking_id', bookingId).eq('month', monthKey).single()
+        if (commRec && commRec.status === 'waiting_to_be_paid') {
+          await supabase.from('commissions').update({ status: 'pending_payment' }).eq('id', commRec.id)
+        }
+      } catch { /* commissions table may not exist */ }
     }
 
     load()
