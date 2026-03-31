@@ -375,6 +375,7 @@ export default function ClientDetailPage() {
               <div className="flex items-center gap-2 mb-1">
                 <input type="checkbox" id="foc" checked={bookingForm.monthly_rate === 0 && bookingForm.total_amount === 0} onChange={e => {
                   if (e.target.checked) setBookingForm(f => ({ ...f, monthly_rate: 0, total_amount: 0 }))
+                  else setBookingForm(f => recalcTotal(f, { monthly_rate: 1 }))
                 }} className="rounded border-gray-300" />
                 <Label htmlFor="foc" className="text-xs text-gray-600 cursor-pointer">FOC (Free of Charge)</Label>
               </div>
