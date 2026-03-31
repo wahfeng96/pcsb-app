@@ -13,11 +13,15 @@ import { ArrowLeft, Edit2, Plus, Trash2, Phone, Mail, MapPin, X, ChevronLeft, Ch
 import { format, parseISO, differenceInMonths, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns'
 import { getRevenueMonths, computeBookingStatus } from '@/lib/booking-utils'
 import type { Client, ClientStage, Booking, Billboard, BookingStatus, PaymentStatus } from '@/types/database'
-import { STAGE_CONFIG, BOOKING_STATUS_CONFIG, PAYMENT_STATUS_CONFIG } from '@/types/database'
+import { BOOKING_STATUS_CONFIG, PAYMENT_STATUS_CONFIG } from '@/types/database'
 import Link from 'next/link'
 import { useRole } from '@/lib/hooks/use-role'
 
-const PIPELINE_ORDER: ClientStage[] = ['inquiry', 'quotation', 'bo', 'scheduled', 'live', 'completed', 'cancelled']
+const CLIENT_STATUS_CONFIG = {
+  active: { label: 'Active', color: 'bg-green-100 text-green-800', icon: '🟢' },
+  upcoming: { label: 'Upcoming', color: 'bg-yellow-100 text-yellow-800', icon: '🟡' },
+  past: { label: 'Past', color: 'bg-gray-100 text-gray-600', icon: '⚪' },
+}
 
 export default function ClientDetailPage() {
   const params = useParams()
@@ -210,21 +214,15 @@ export default function ClientDetailPage() {
         {canEdit && <Button size="icon" variant="ghost" className="text-red-600" onClick={handleDelete}><Trash2 className="h-4 w-4" /></Button>}
       </div>
 
-      {/* Stage pipeline */}
-      <div className="flex gap-1 overflow-x-auto pb-1">
-        {PIPELINE_ORDER.map(s => (
-          <Button
-            key={s}
-            size="sm"
-            variant={client.stage === s ? 'default' : 'outline'}
-            className={`text-xs whitespace-nowrap ${client.stage === s ? STAGE_CONFIG[s].color.replace('bg-', 'bg-').replace('text-', 'text-') : ''}`}
-            onClick={() => canEdit && updateStage(s)}
-            disabled={!canEdit}
-          >
-            {STAGE_CONFIG[s].label}
-          </Button>
-        ))}
-      </div>
+      {/* Auto-computed client status */}
+      {(() => {
+        const today = new Date(); today.setHours(0, 0, 0, 0)
+        const hasLive = bookings.some(b => new Date(b.start_date) <= today && new Date(b.end_date + 'T23:59:59') >= today && b.status !== 'cancelled')
+        const hasUpcoming = bookings.some(b => new Date(b.start_date) > today && b.status !== 'cancelled')
+        const status = hasLive ? 'active' : hasUpcoming ? 'upcoming' : 'past' as keyof typeof CLIENT_STATUS_CONFIG
+        const cfg = CLIENT_STATUS_CONFIG[status]
+        return <Badge className={cfg.color + ' text-sm px-3 py-1'}>{cfg.icon} {cfg.label}</Badge>
+      })()}
 
       {/* Client info */}
       <Card>

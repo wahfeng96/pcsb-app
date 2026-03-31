@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -9,47 +9,101 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, Search, Phone, Mail, X } from 'lucide-react'
-import { STAGE_CONFIG } from '@/types/database'
-import type { Client, ClientStage } from '@/types/database'
+import type { Client, Booking } from '@/types/database'
 import Link from 'next/link'
 import { useRole } from '@/lib/hooks/use-role'
 
-const PIPELINE_ORDER: ClientStage[] = ['inquiry', 'quotation', 'bo', 'scheduled', 'live', 'completed', 'cancelled']
+type ClientStatus = 'active' | 'upcoming' | 'past'
+
+const CLIENT_STATUS_CONFIG: Record<ClientStatus, { label: string; color: string; icon: string }> = {
+  active: { label: 'Active', color: 'bg-green-100 text-green-800', icon: '🟢' },
+  upcoming: { label: 'Upcoming', color: 'bg-yellow-100 text-yellow-800', icon: '🟡' },
+  past: { label: 'Past', color: 'bg-gray-100 text-gray-600', icon: '⚪' },
+}
+
+function computeClientStatus(clientId: string, bookings: Booking[]): ClientStatus {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const cb = bookings.filter(b => b.client_id === clientId && b.status !== 'cancelled')
+  const hasLive = cb.some(b => new Date(b.start_date) <= today && new Date(b.end_date + 'T23:59:59') >= today)
+  if (hasLive) return 'active'
+  const hasUpcoming = cb.some(b => new Date(b.start_date) > today)
+  if (hasUpcoming) return 'upcoming'
+  return 'past'
+}
 
 export default function ClientsPage() {
   const supabase = createClient()
   const { canEdit } = useRole()
   const [clients, setClients] = useState<Client[]>([])
+  const [bookings, setBookings] = useState<Booking[]>([])
   const [search, setSearch] = useState('')
-  const [stageFilter, setStageFilter] = useState<ClientStage | 'all'>('all')
+  const [statusFilter, setStatusFilter] = useState<ClientStatus | 'all'>('all')
   const [sortBy, setSortBy] = useState<'name-az' | 'name-za' | 'recent' | 'oldest'>('recent')
-  const [view, setView] = useState<'list' | 'pipeline'>('list')
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({
-    company_name: '', contact_person: '', phone: '', email: '', address: '', notes: '', stage: 'inquiry' as ClientStage,
+    company_name: '', contact_person: '', phone: '', email: '', address: '', notes: '',
   })
 
-  async function loadClients() {
-    const { data } = await supabase.from('clients').select('*').order('updated_at', { ascending: false })
-    setClients(data || [])
+  async function load() {
+    const [c, b] = await Promise.all([
+      supabase.from('clients').select('*').order('updated_at', { ascending: false }),
+      supabase.from('bookings').select('id, client_id, start_date, end_date, status, monthly_rate, total_amount').neq('status', 'cancelled'),
+    ])
+    setClients(c.data || [])
+    setBookings(b.data || [])
     setLoading(false)
   }
 
-  useEffect(() => { loadClients() }, [])
+  useEffect(() => { load() }, [])
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
-    await supabase.from('clients').insert(form)
-    setForm({ company_name: '', contact_person: '', phone: '', email: '', address: '', notes: '', stage: 'inquiry' })
+    await supabase.from('clients').insert({ ...form, stage: 'inquiry' })
+    setForm({ company_name: '', contact_person: '', phone: '', email: '', address: '', notes: '' })
     setShowAdd(false)
-    loadClients()
+    load()
   }
+
+  // Compute status for each client
+  const clientStatuses = useMemo(() => {
+    const map = new Map<string, ClientStatus>()
+    clients.forEach(c => map.set(c.id, computeClientStatus(c.id, bookings)))
+    return map
+  }, [clients, bookings])
+
+  // Summary counts
+  const statusCounts = useMemo(() => {
+    const counts = { active: 0, upcoming: 0, past: 0 }
+    clientStatuses.forEach(s => counts[s]++)
+    return counts
+  }, [clientStatuses])
+
+  // Compute total active revenue per client
+  const clientRevenue = useMemo(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const map = new Map<string, number>()
+    bookings.forEach(b => {
+      if (new Date(b.start_date) <= today && new Date(b.end_date + 'T23:59:59') >= today) {
+        map.set(b.client_id, (map.get(b.client_id) || 0) + (b.monthly_rate || 0))
+      }
+    })
+    return map
+  }, [bookings])
+
+  // Count bookings per client
+  const clientBookingCount = useMemo(() => {
+    const map = new Map<string, number>()
+    bookings.forEach(b => map.set(b.client_id, (map.get(b.client_id) || 0) + 1))
+    return map
+  }, [bookings])
 
   const filtered = clients.filter(c => {
     const matchSearch = !search || c.company_name.toLowerCase().includes(search.toLowerCase()) || c.contact_person.toLowerCase().includes(search.toLowerCase())
-    const matchStage = stageFilter === 'all' || c.stage === stageFilter
-    return matchSearch && matchStage
+    const matchStatus = statusFilter === 'all' || clientStatuses.get(c.id) === statusFilter
+    return matchSearch && matchStatus
   }).sort((a, b) => {
     switch (sortBy) {
       case 'name-az': return a.company_name.localeCompare(b.company_name)
@@ -81,17 +135,34 @@ export default function ClientsPage() {
                 <div><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} /></div>
               </div>
               <div><Label>Address</Label><Input value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} /></div>
-              <div><Label>Stage</Label>
-                <select className="w-full border rounded-md px-3 py-2 text-sm" value={form.stage} onChange={e => setForm(f => ({ ...f, stage: e.target.value as ClientStage }))}>
-                  {PIPELINE_ORDER.map(s => <option key={s} value={s}>{STAGE_CONFIG[s].label}</option>)}
-                </select>
-              </div>
               <div><Label>Notes</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
               <Button type="submit" className="w-full bg-red-600 hover:bg-red-700">Add Client</Button>
             </form>
           </CardContent>
         </Card>
       )}
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-3 gap-2">
+        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setStatusFilter(statusFilter === 'active' ? 'all' : 'active')}>
+          <CardContent className="p-3 text-center">
+            <p className="text-lg font-bold text-green-700">{statusCounts.active}</p>
+            <p className="text-[10px] text-green-600">🟢 Active</p>
+          </CardContent>
+        </Card>
+        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setStatusFilter(statusFilter === 'upcoming' ? 'all' : 'upcoming')}>
+          <CardContent className="p-3 text-center">
+            <p className="text-lg font-bold text-yellow-700">{statusCounts.upcoming}</p>
+            <p className="text-[10px] text-yellow-600">🟡 Upcoming</p>
+          </CardContent>
+        </Card>
+        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setStatusFilter(statusFilter === 'past' ? 'all' : 'past')}>
+          <CardContent className="p-3 text-center">
+            <p className="text-lg font-bold text-gray-500">{statusCounts.past}</p>
+            <p className="text-[10px] text-gray-500">⚪ Past</p>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Search & sort */}
       <div className="flex gap-2">
@@ -107,24 +178,24 @@ export default function ClientsPage() {
         </select>
       </div>
 
-      {/* View toggle & stage filter */}
-      <div className="flex gap-2 items-center flex-wrap">
-        <Button size="sm" variant={view === 'list' ? 'default' : 'outline'} onClick={() => setView('list')} className={view === 'list' ? 'bg-red-600 hover:bg-red-700' : ''}>List</Button>
-        <Button size="sm" variant={view === 'pipeline' ? 'default' : 'outline'} onClick={() => setView('pipeline')} className={view === 'pipeline' ? 'bg-red-600 hover:bg-red-700' : ''}>Pipeline</Button>
-        <div className="h-4 w-px bg-gray-300" />
-        <div className="flex gap-1 overflow-x-auto">
-          <Button size="sm" variant={stageFilter === 'all' ? 'default' : 'outline'} onClick={() => setStageFilter('all')} className={`text-xs ${stageFilter === 'all' ? 'bg-red-600 hover:bg-red-700' : ''}`}>All</Button>
-          {PIPELINE_ORDER.filter(s => s !== 'cancelled').map(s => (
-            <Button key={s} size="sm" variant={stageFilter === s ? 'default' : 'outline'} onClick={() => setStageFilter(s)} className={`text-xs whitespace-nowrap ${stageFilter === s ? 'bg-red-600 hover:bg-red-700' : ''}`}>{STAGE_CONFIG[s].label}</Button>
-          ))}
-        </div>
+      {/* Status filter */}
+      <div className="flex gap-1">
+        <Button size="sm" variant={statusFilter === 'all' ? 'default' : 'outline'} onClick={() => setStatusFilter('all')} className={`text-xs ${statusFilter === 'all' ? 'bg-red-600 hover:bg-red-700' : ''}`}>All ({clients.length})</Button>
+        {(['active', 'upcoming', 'past'] as ClientStatus[]).map(s => (
+          <Button key={s} size="sm" variant={statusFilter === s ? 'default' : 'outline'} onClick={() => setStatusFilter(s)} className={`text-xs ${statusFilter === s ? 'bg-red-600 hover:bg-red-700' : ''}`}>{CLIENT_STATUS_CONFIG[s].icon} {CLIENT_STATUS_CONFIG[s].label} ({statusCounts[s]})</Button>
+        ))}
       </div>
 
-      {view === 'list' ? (
-        <div className="space-y-2">
-          {filtered.length === 0 ? (
-            <Card><CardContent className="p-6 text-center text-gray-500">No clients found</CardContent></Card>
-          ) : filtered.map(client => (
+      {/* Client list */}
+      <div className="space-y-2">
+        {filtered.length === 0 ? (
+          <Card><CardContent className="p-6 text-center text-gray-500">No clients found</CardContent></Card>
+        ) : filtered.map(client => {
+          const status = clientStatuses.get(client.id) || 'past'
+          const revenue = clientRevenue.get(client.id) || 0
+          const bookingCount = clientBookingCount.get(client.id) || 0
+          const statusConfig = CLIENT_STATUS_CONFIG[status]
+          return (
             <Link key={client.id} href={`/clients/${client.id}`}>
               <Card className="hover:bg-gray-50 transition-colors mb-2">
                 <CardContent className="p-3">
@@ -136,41 +207,16 @@ export default function ClientsPage() {
                         {client.phone && <span className="flex items-center gap-1 text-xs text-gray-400"><Phone className="h-3 w-3" />{client.phone}</span>}
                         {client.email && <span className="flex items-center gap-1 text-xs text-gray-400"><Mail className="h-3 w-3" />{client.email}</span>}
                       </div>
+                      <p className="text-[10px] text-gray-400 mt-0.5">{bookingCount} booking{bookingCount !== 1 ? 's' : ''}{revenue > 0 ? ` • RM ${revenue.toLocaleString()}/mo active` : ''}</p>
                     </div>
-                    <Badge variant="secondary" className={STAGE_CONFIG[client.stage]?.color}>{STAGE_CONFIG[client.stage]?.label}</Badge>
+                    <Badge variant="secondary" className={statusConfig.color}>{statusConfig.icon} {statusConfig.label}</Badge>
                   </div>
                 </CardContent>
               </Card>
             </Link>
-          ))}
-        </div>
-      ) : (
-        /* Pipeline / Kanban view */
-        <div className="flex gap-3 overflow-x-auto pb-4">
-          {PIPELINE_ORDER.filter(s => s !== 'cancelled').map(stage => {
-            const stageClients = filtered.filter(c => c.stage === stage)
-            return (
-              <div key={stage} className="min-w-[200px] flex-shrink-0">
-                <div className={`rounded-t-lg px-3 py-2 ${STAGE_CONFIG[stage].color}`}>
-                  <span className="text-xs font-semibold">{STAGE_CONFIG[stage].label} ({stageClients.length})</span>
-                </div>
-                <div className="bg-gray-100 rounded-b-lg p-2 space-y-2 min-h-[100px]">
-                  {stageClients.map(client => (
-                    <Link key={client.id} href={`/clients/${client.id}`}>
-                      <Card className="hover:shadow-md transition-shadow mb-2">
-                        <CardContent className="p-2">
-                          <p className="text-xs font-medium truncate">{client.company_name}</p>
-                          <p className="text-[10px] text-gray-500">{client.contact_person}</p>
-                        </CardContent>
-                      </Card>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
+          )
+        })}
+      </div>
     </div>
   )
 }
