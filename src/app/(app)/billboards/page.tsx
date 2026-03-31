@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Edit2, DollarSign, Plus, Trash2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { computeBookingStatus } from '@/lib/booking-utils'
 import { format, parseISO, startOfMonth, endOfMonth, addMonths, subMonths, differenceInMonths, isSameMonth, isWithinInterval } from 'date-fns'
 import { getRevenueMonths } from '@/lib/booking-utils'
 import type { Billboard, Booking, Client, Profile } from '@/types/database'
@@ -156,7 +157,7 @@ export default function BillboardsPage() {
   // Calculate monthly figures for a billboard
   function getMonthlyFigures(bb: Billboard, month: Date) {
     // Revenue: sum of bookings that span this month, divided by their duration
-    const bbBookings = bookings.filter(b => b.billboard_id === bb.id && b.status !== 'cancelled')
+    const bbBookings = bookings.filter(b => b.billboard_id === bb.id && computeBookingStatus(b.start_date, b.end_date, b.status) !== 'cancelled')
     let monthRevenue = 0
     bbBookings.forEach(b => {
       const entries = getMonthlyRevenue(b)
@@ -182,7 +183,7 @@ export default function BillboardsPage() {
 
   // Total figures (all time)
   function getTotalFigures(bb: Billboard) {
-    const bbBookings = bookings.filter(b => b.billboard_id === bb.id && b.status !== 'cancelled')
+    const bbBookings = bookings.filter(b => b.billboard_id === bb.id && computeBookingStatus(b.start_date, b.end_date, b.status) !== 'cancelled')
     const totalRevenue = bbBookings.reduce((sum, b) => sum + (b.total_amount || 0), 0)
     const bbCosts = costs.filter(c => c.billboard_id === bb.id)
     const totalCost = bbCosts.reduce((sum, c) => sum + (c.amount || 0), 0)
@@ -227,7 +228,7 @@ export default function BillboardsPage() {
 
       <div className="space-y-4">
         {billboards.map(bb => {
-          const active = bookings.filter(b => b.billboard_id === bb.id && (b.status === 'live' || b.status === 'upcoming'))
+          const active = bookings.filter(b => b.billboard_id === bb.id && (computeBookingStatus(b.start_date, b.end_date, b.status) === 'live' || computeBookingStatus(b.start_date, b.end_date, b.status) === 'upcoming'))
           const bbCosts = costs.filter(c => c.billboard_id === bb.id)
           const monthly = getMonthlyFigures(bb, viewMonth)
           const total = getTotalFigures(bb)

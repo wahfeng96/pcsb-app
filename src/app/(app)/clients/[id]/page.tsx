@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { ArrowLeft, Edit2, Plus, Trash2, Phone, Mail, MapPin, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { format, parseISO, differenceInMonths, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns'
-import { getRevenueMonths } from '@/lib/booking-utils'
+import { getRevenueMonths, computeBookingStatus } from '@/lib/booking-utils'
 import type { Client, ClientStage, Booking, Billboard, BookingStatus, PaymentStatus } from '@/types/database'
 import { STAGE_CONFIG, BOOKING_STATUS_CONFIG, PAYMENT_STATUS_CONFIG } from '@/types/database'
 import Link from 'next/link'
@@ -33,7 +33,7 @@ export default function ClientDetailPage() {
   const [form, setForm] = useState<Partial<Client>>({})
   const [bookingForm, setBookingForm] = useState({
     billboard_id: '', spot_size: '' as any, start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', commission_percent: 0, notes: '',
-    status: 'upcoming' as BookingStatus, payment_status: 'pending_payment' as PaymentStatus,
+    status: 'upcoming' as BookingStatus, payment_status: 'pending_payment' as PaymentStatus, // status auto-computed on save
     _months: 0,
   })
   const [loading, setLoading] = useState(true)
@@ -102,6 +102,8 @@ export default function ClientDetailPage() {
     if (!bookingForm.spot_size) { alert('Please select spot size (0.5 or 1)'); return }
     const { _months, ...bookingDataWithCommission } = bookingForm
     const commission_percent = bookingDataWithCommission.commission_percent || 0
+    // Auto-compute status from dates
+    bookingDataWithCommission.status = computeBookingStatus(bookingDataWithCommission.start_date, bookingDataWithCommission.end_date) as any
     let bookingId: string
     if (editingBookingId) {
       await supabase.from('bookings').update(bookingDataWithCommission).eq('id', editingBookingId)
@@ -378,11 +380,6 @@ export default function ClientDetailPage() {
                 <div><Label>Total (RM)</Label><Input type="number" value={bookingForm.total_amount || ''} readOnly className="bg-gray-50" /></div>
               </div>
               <div><Label>Slot Number</Label><Input type="number" min={1} max={15} value={bookingForm.slot_number} onChange={e => setBookingForm(f => ({ ...f, slot_number: +e.target.value }))} /></div>
-              <div><Label>Status</Label>
-                <select className="w-full border rounded-md px-3 py-2 text-sm" value={bookingForm.status} onChange={e => setBookingForm(f => ({ ...f, status: e.target.value as BookingStatus }))}>
-                  <option value="upcoming">Upcoming</option><option value="live">Live</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option>
-                </select>
-              </div>
               <div><Label>Payment Status</Label>
                 <select className="w-full border rounded-md px-3 py-2 text-sm" value={bookingForm.payment_status} onChange={e => setBookingForm(f => ({ ...f, payment_status: e.target.value as PaymentStatus }))}>
                   <option value="pending_payment">Pending Payment</option>
@@ -423,7 +420,7 @@ export default function ClientDetailPage() {
               <div className="flex items-center justify-between mb-1">
                 <span className="font-medium text-sm">{b.billboard?.name}</span>
                 <div className="flex gap-1 items-center">
-                  <Badge variant="secondary" className={BOOKING_STATUS_CONFIG[b.status]?.color + ' text-[10px]'}>{BOOKING_STATUS_CONFIG[b.status]?.label}</Badge>
+                  <Badge variant="secondary" className={BOOKING_STATUS_CONFIG[computeBookingStatus(b.start_date, b.end_date, b.status)]?.color + ' text-[10px]'}>{BOOKING_STATUS_CONFIG[computeBookingStatus(b.start_date, b.end_date, b.status)]?.label}</Badge>
                   <Badge variant="outline" className={PAYMENT_STATUS_CONFIG[b.payment_status]?.color + ' text-[10px]'}>{PAYMENT_STATUS_CONFIG[b.payment_status]?.label}</Badge>
                   {canEdit && <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => startEditBooking(b)}><Edit2 className="h-3 w-3" /></Button>}
                   {canEdit && <Button size="icon" variant="ghost" className="h-6 w-6 text-red-600" onClick={() => deleteBooking(b.id)}><Trash2 className="h-3 w-3" /></Button>}

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, subMonths, parseISO, isSameDay } from 'date-fns'
 import type { Booking, Client, Billboard } from '@/types/database'
+import { computeBookingStatus } from '@/lib/booking-utils'
 
 type BookingWithRefs = Booking & { client: Client; billboard: Billboard }
 
@@ -47,7 +48,7 @@ export default function CalendarPage() {
   function getEventsForDay(date: Date) {
     const events: { type: 'in' | 'out'; booking: BookingWithRefs }[] = []
     filteredBookings.forEach(b => {
-      if (b.status === 'cancelled') return
+      if (computeBookingStatus(b.start_date, b.end_date, b.status) === 'cancelled') return
       const start = parseISO(b.start_date)
       const end = parseISO(b.end_date)
       if (isSameDay(date, start)) events.push({ type: 'in', booking: b })
@@ -127,7 +128,7 @@ export default function CalendarPage() {
         <h3 className="font-semibold text-sm mb-2">Upcoming In/Out</h3>
         <div className="space-y-2">
           {filteredBookings
-            .filter(b => b.status !== 'cancelled')
+            .filter(b => computeBookingStatus(b.start_date, b.end_date, b.status) !== 'cancelled')
             .flatMap(b => {
               const events: { date: string; type: 'in' | 'out'; booking: BookingWithRefs }[] = []
               events.push({ date: b.start_date, type: 'in', booking: b })
