@@ -49,7 +49,7 @@ export default function DashboardPage() {
   const monthStartStr = [monthStart.getFullYear(), String(monthStart.getMonth()+1).padStart(2,'0'), String(monthStart.getDate()).padStart(2,'0')].join('-')
   const monthEndStr = [monthEnd.getFullYear(), String(monthEnd.getMonth()+1).padStart(2,'0'), String(monthEnd.getDate()).padStart(2,'0')].join('-')
 
-  function getOccupancy(billboardId: string): { count: number; brands: string[] } {
+  function getOccupancy(billboardId: string): { count: number; brands: { name: string; spotSize: number }[] } {
     const active = bookings.filter(b => {
       if (b.billboard_id !== billboardId) return false
       const status = computeBookingStatus(b.start_date, b.end_date, b.status)
@@ -61,8 +61,8 @@ export default function DashboardPage() {
       }
     })
     return {
-      count: active.length,
-      brands: active.map(b => b.brand_name || b.client?.company_name || '?'),
+      count: active.reduce((sum, b) => sum + (b.spot_size || 1), 0),
+      brands: active.map(b => ({ name: b.brand_name || b.client?.company_name || '?', spotSize: b.spot_size || 1 })),
     }
   }
 
@@ -174,6 +174,7 @@ export default function DashboardPage() {
             const { count, brands } = getOccupancy(bb.id)
             const pct = Math.min((count / bb.max_slots) * 100, 100)
             const revenue = getActiveRevenue(bb.id)
+            const countDisplay = count % 1 === 0 ? count : count.toFixed(1)
             return (
               <Card key={bb.id}>
                 <CardContent className="p-4">
@@ -182,7 +183,7 @@ export default function DashboardPage() {
                       <p className="font-medium text-sm">{bb.name}</p>
                       <p className="text-xs text-gray-500">{bb.location}</p>
                     </div>
-                    <span className={`text-lg font-bold ${count >= bb.max_slots ? 'text-red-600' : count > 0 ? 'text-green-700' : 'text-gray-400'}`}>{count}/{bb.max_slots}</span>
+                    <span className={`text-lg font-bold ${count >= bb.max_slots ? 'text-red-600' : count > 0 ? 'text-green-700' : 'text-gray-400'}`}>{countDisplay}/{bb.max_slots}</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
                     <div className={`h-2.5 rounded-full transition-all ${pct >= 90 ? 'bg-red-600' : pct >= 50 ? 'bg-yellow-500' : 'bg-green-500'}`} style={{ width: `${pct}%` }} />
@@ -191,7 +192,7 @@ export default function DashboardPage() {
                   {brands.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1">
                       {brands.map((brand, i) => (
-                        <span key={i} className="inline-block bg-red-50 text-red-700 text-[11px] font-medium px-1.5 py-0.5 rounded">{brand}</span>
+                        <span key={i} className={`inline-block text-[11px] font-medium px-1.5 py-0.5 rounded ${brand.spotSize < 1 ? 'bg-orange-50 text-orange-700' : 'bg-red-50 text-red-700'}`}>{brand.name}{brand.spotSize < 1 ? ` (${brand.spotSize})` : ''}</span>
                       ))}
                     </div>
                   )}
@@ -209,6 +210,8 @@ export default function DashboardPage() {
           if (status === 'cancelled') return false
           return b.start_date <= todayStr && b.end_date >= todayStr
         })
+        const totalSpots = liveBrands.reduce((sum, b) => sum + (b.spot_size || 1), 0)
+        const totalSpotsDisplay = totalSpots % 1 === 0 ? totalSpots : totalSpots.toFixed(1)
         const grouped = liveBrands.reduce((acc, b) => {
           const brand = b.brand_name || b.client?.company_name || '?'
           if (!acc[brand]) acc[brand] = []
@@ -219,29 +222,34 @@ export default function DashboardPage() {
         return (
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-semibold">🟢 Live Now ({liveBrands.length} spots)</h2>
+              <h2 className="text-lg font-semibold">🟢 Live Now ({totalSpotsDisplay} spots)</h2>
             </div>
             {brandList.length === 0 ? (
               <Card><CardContent className="p-4 text-center text-gray-500 text-sm">No live brands today</CardContent></Card>
             ) : (
               <div className="space-y-2">
-                {brandList.map(([brand, bks]) => (
+                {brandList.map(([brand, bks]) => {
+                  const brandSpots = bks.reduce((sum, b) => sum + (b.spot_size || 1), 0)
+                  const brandSpotsDisplay = brandSpots % 1 === 0 ? brandSpots : brandSpots.toFixed(1)
+                  return (
                   <Card key={brand}>
                     <CardContent className="p-3">
                       <div className="flex items-center justify-between">
                         <p className="font-semibold text-sm">{brand}</p>
-                        <span className="text-xs text-gray-500">{bks.length} spot{bks.length > 1 ? 's' : ''}</span>
+                        <span className="text-xs text-gray-500">{brandSpotsDisplay} spot{brandSpots !== 1 ? 's' : ''}</span>
                       </div>
                       <div className="flex flex-wrap gap-1 mt-1.5">
-                        {bks.map(b => (
-                          <span key={b.id} className="text-[11px] bg-green-50 text-green-700 px-1.5 py-0.5 rounded">
-                            {b.billboard?.name || 'Billboard'} • Slot {b.slot_number}
+                        {bks.map(b => {
+                          const isHalf = (b.spot_size || 1) < 1
+                          return (
+                          <span key={b.id} className={`text-[11px] px-1.5 py-0.5 rounded ${isHalf ? 'bg-orange-50 text-orange-700' : 'bg-green-50 text-green-700'}`}>
+                            {b.billboard?.name || 'Billboard'} • Slot {b.slot_number}{isHalf ? ` (${b.spot_size})` : ''}
                           </span>
-                        ))}
+                        )})}
                       </div>
                     </CardContent>
                   </Card>
-                ))}
+                )})}
               </div>
             )}
           </div>
