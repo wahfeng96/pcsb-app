@@ -106,7 +106,8 @@ export default function CalendarPage() {
                   {events.slice(0, 3).map((ev, i) => (
                     <div
                       key={`${ev.booking.id}-${ev.type}-${i}`}
-                      className={`text-[8px] md:text-[10px] px-1 rounded truncate text-white font-medium ${
+                      title={`${ev.booking.brand_name || ev.booking.client?.company_name} (${ev.type}) — ${ev.booking.billboard?.name || ''}`}
+                      className={`text-[8px] md:text-[10px] px-1 rounded truncate text-white font-medium cursor-default ${
                         ev.type === 'in' ? 'bg-green-500' : 'bg-red-500'
                       } ${ev.booking.spot_size === 0.5 ? 'w-1/2 opacity-80' : 'w-full'}`}
                     >
@@ -114,7 +115,17 @@ export default function CalendarPage() {
                     </div>
                   ))}
                   {events.length > 3 && (
-                    <div className="text-[8px] text-gray-500 px-1">+{events.length - 3}</div>
+                    <div className="relative group">
+                      <div className="text-[8px] text-gray-500 px-1 cursor-pointer hover:text-red-600 hover:font-bold">+{events.length - 3}</div>
+                      <div className="hidden group-hover:block absolute z-50 bottom-full left-0 mb-1 bg-gray-900 text-white text-[10px] rounded-lg px-2.5 py-1.5 shadow-lg whitespace-nowrap">
+                        {events.slice(3).map((ev, i) => (
+                          <div key={i} className="flex items-center gap-1.5 py-0.5">
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${ev.type === 'in' ? 'bg-green-400' : 'bg-red-400'}`} />
+                            {ev.booking.brand_name || ev.booking.client?.company_name} ({ev.type})
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
