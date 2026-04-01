@@ -44,17 +44,20 @@ export default function DashboardPage() {
   const monthStart = startOfMonth(today)
   const monthEnd = endOfMonth(today)
 
+  // MYT date string for reliable comparisons (no timezone issues)
+  const todayStr = [today.getFullYear(), String(today.getMonth()+1).padStart(2,'0'), String(today.getDate()).padStart(2,'0')].join('-')
+  const monthStartStr = [monthStart.getFullYear(), String(monthStart.getMonth()+1).padStart(2,'0'), String(monthStart.getDate()).padStart(2,'0')].join('-')
+  const monthEndStr = [monthEnd.getFullYear(), String(monthEnd.getMonth()+1).padStart(2,'0'), String(monthEnd.getDate()).padStart(2,'0')].join('-')
+
   function getOccupancy(billboardId: string): { count: number; brands: string[] } {
     const active = bookings.filter(b => {
       if (b.billboard_id !== billboardId) return false
       const status = computeBookingStatus(b.start_date, b.end_date, b.status)
       if (status === 'cancelled') return false
-      const bStart = new Date(b.start_date)
-      const bEnd = new Date(b.end_date + 'T23:59:59')
       if (occView === 'today') {
-        return bStart <= today && bEnd >= today
+        return b.start_date <= todayStr && b.end_date >= todayStr
       } else {
-        return bStart <= monthEnd && bEnd >= monthStart
+        return b.start_date <= monthEndStr && b.end_date >= monthStartStr
       }
     })
     return {
@@ -66,12 +69,10 @@ export default function DashboardPage() {
   function getActiveRevenue(billboardId: string): number {
     return bookings.filter(b => {
       if (b.billboard_id !== billboardId) return false
-      const bStart = new Date(b.start_date)
-      const bEnd = new Date(b.end_date + 'T23:59:59')
       if (occView === 'today') {
-        return bStart <= today && bEnd >= today
+        return b.start_date <= todayStr && b.end_date >= todayStr
       } else {
-        return bStart <= monthEnd && bEnd >= monthStart
+        return b.start_date <= monthEndStr && b.end_date >= monthStartStr
       }
     }).reduce((s, b) => s + (b.monthly_rate || 0), 0)
   }
@@ -79,9 +80,9 @@ export default function DashboardPage() {
   // Compute client status
   function getClientStatus(clientId: string): { label: string; color: string; icon: string } {
     const cb = bookings.filter(b => b.client_id === clientId && computeBookingStatus(b.start_date, b.end_date, b.status) !== 'cancelled')
-    const hasLive = cb.some(b => new Date(b.start_date) <= today && new Date(b.end_date + 'T23:59:59') >= today)
+    const hasLive = cb.some(b => b.start_date <= todayStr && b.end_date >= todayStr)
     if (hasLive) return { label: 'Active', color: 'bg-green-100 text-green-800', icon: '🟢' }
-    const hasUpcoming = cb.some(b => new Date(b.start_date) > today)
+    const hasUpcoming = cb.some(b => b.start_date > todayStr)
     if (hasUpcoming) return { label: 'Upcoming', color: 'bg-yellow-100 text-yellow-800', icon: '🟡' }
     return { label: 'Past', color: 'bg-gray-100 text-gray-600', icon: '⚪' }
   }
@@ -206,9 +207,7 @@ export default function DashboardPage() {
         const liveBrands = bookings.filter(b => {
           const status = computeBookingStatus(b.start_date, b.end_date, b.status)
           if (status === 'cancelled') return false
-          const bStart = new Date(b.start_date)
-          const bEnd = new Date(b.end_date + 'T23:59:59')
-          return bStart <= today && bEnd >= today
+          return b.start_date <= todayStr && b.end_date >= todayStr
         })
         const grouped = liveBrands.reduce((acc, b) => {
           const brand = b.brand_name || b.client?.company_name || '?'
