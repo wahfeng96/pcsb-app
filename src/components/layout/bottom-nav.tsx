@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Calendar, Users, Building2, MoreHorizontal, FileText, BarChart3, HandCoins, Percent, Shield, X } from 'lucide-react'
+import { LayoutDashboard, Calendar, Users, Building2, MoreHorizontal, FileText, BarChart3, HandCoins, Percent, Shield, StickyNote, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const mainNav = [
@@ -19,6 +19,7 @@ const moreNav = [
   { href: '/profit-sharing', label: 'Profit Sharing', icon: HandCoins },
   { href: '/commission', label: 'Commission', icon: Percent },
   { href: '/users', label: 'Users', icon: Shield },
+  { href: '/remarks', label: 'Remarks', icon: StickyNote },
 ]
 
 export function BottomNav() {
