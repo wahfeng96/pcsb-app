@@ -27,11 +27,11 @@ export function getRevenueMonths(startDate: Date, monthlyRate: number, totalAmou
  */
 export function computeBookingStatus(startDate: string, endDate: string, currentStatus?: BookingStatus): BookingStatus {
   if (currentStatus === 'cancelled') return 'cancelled'
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const start = new Date(startDate + 'T00:00:00')
-  const end = new Date(endDate + 'T23:59:59')
-  if (today < start) return 'upcoming'
-  if (today > end) return 'completed'
+  // Use MYT (UTC+8) for date comparison since business is in Malaysia
+  const now = new Date()
+  const myt = new Date(now.getTime() + (8 * 60 + now.getTimezoneOffset()) * 60000)
+  const todayStr = myt.toISOString().split('T')[0]
+  if (todayStr < startDate) return 'upcoming'
+  if (todayStr > endDate) return 'completed'
   return 'live'
 }

@@ -35,7 +35,10 @@ export default function DashboardPage() {
     load()
   }, [])
 
-  const today = new Date()
+  // Use MYT (UTC+8) for date calculations since business is in Malaysia
+  const now = new Date()
+  const mytMs = now.getTime() + (8 * 60 + now.getTimezoneOffset()) * 60000
+  const today = new Date(mytMs)
   today.setHours(0, 0, 0, 0)
   const next7days = addDays(today, 7)
   const monthStart = startOfMonth(today)
