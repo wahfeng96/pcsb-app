@@ -185,7 +185,11 @@ export default function DashboardPage() {
                   </div>
                   {revenue > 0 && <p className="text-xs text-gray-500 mb-1">RM {revenue.toLocaleString()}/mo</p>}
                   {brands.length > 0 && (
-                    <p className="text-[10px] text-gray-400 truncate">{brands.join(', ')}</p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {brands.map((brand, i) => (
+                        <span key={i} className="inline-block bg-red-50 text-red-700 text-[11px] font-medium px-1.5 py-0.5 rounded">{brand}</span>
+                      ))}
+                    </div>
                   )}
                 </CardContent>
               </Card>
