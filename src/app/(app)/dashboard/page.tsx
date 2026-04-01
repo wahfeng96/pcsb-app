@@ -198,6 +198,54 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Currently Live Brands */}
+      {occView === 'today' && (() => {
+        const liveBrands = bookings.filter(b => {
+          const status = computeBookingStatus(b.start_date, b.end_date, b.status)
+          if (status === 'cancelled') return false
+          const bStart = new Date(b.start_date)
+          const bEnd = new Date(b.end_date + 'T23:59:59')
+          return bStart <= today && bEnd >= today
+        })
+        const grouped = liveBrands.reduce((acc, b) => {
+          const brand = b.brand_name || b.client?.company_name || '?'
+          if (!acc[brand]) acc[brand] = []
+          acc[brand].push(b)
+          return acc
+        }, {} as Record<string, typeof liveBrands>)
+        const brandList = Object.entries(grouped).sort((a, b) => a[0].localeCompare(b[0]))
+        return (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-semibold">🟢 Live Now ({liveBrands.length} spots)</h2>
+            </div>
+            {brandList.length === 0 ? (
+              <Card><CardContent className="p-4 text-center text-gray-500 text-sm">No live brands today</CardContent></Card>
+            ) : (
+              <div className="space-y-2">
+                {brandList.map(([brand, bks]) => (
+                  <Card key={brand}>
+                    <CardContent className="p-3">
+                      <div className="flex items-center justify-between">
+                        <p className="font-semibold text-sm">{brand}</p>
+                        <span className="text-xs text-gray-500">{bks.length} spot{bks.length > 1 ? 's' : ''}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {bks.map(b => (
+                          <span key={b.id} className="text-[11px] bg-green-50 text-green-700 px-1.5 py-0.5 rounded">
+                            {b.billboard?.name || 'Billboard'} • Slot {b.slot_number}
+                          </span>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
       {/* Upcoming Events */}
       <div>
         <h2 className="text-lg font-semibold mb-3">Upcoming (Next 7 Days)</h2>
