@@ -124,7 +124,7 @@ export default function ClientDetailPage() {
     const paymentToProfit: Record<PaymentStatus, string> = {
       pending_payment: 'pending_payment',
       received_pending_profit_share: 'waiting_profit_share',
-      settled: 'settled',
+      settled: 'waiting_profit_share',
     }
     const profitStatus = paymentToProfit[bookingData.payment_status]
     const months = getRevenueMonths(parseISO(bookingData.start_date), bookingData.monthly_rate, bookingData.total_amount)

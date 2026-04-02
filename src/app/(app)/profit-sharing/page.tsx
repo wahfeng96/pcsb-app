@@ -98,8 +98,16 @@ export default function ProfitSharingPage() {
       alert('Error: ' + result.error.message)
       return
     }
-    // Auto-sync commission when profit sharing → waiting_profit_share
+    // Auto-sync when profit sharing → waiting_profit_share (means client paid)
     if (next === 'waiting_profit_share') {
+      // Reverse sync: auto-update booking → settled
+      try {
+        const { data: bk } = await supabase.from('bookings').select('id, payment_status').eq('id', bookingId).single()
+        if (bk && bk.payment_status !== 'settled') {
+          await supabase.from('bookings').update({ payment_status: 'settled' }).eq('id', bookingId)
+        }
+      } catch { /* ignore */ }
+      // Auto-sync commission → waiting_to_be_paid
       try {
         const { data: commRec } = await supabase.from('commissions').select('id, status').eq('booking_id', bookingId).eq('month', monthKey).single()
         if (commRec && commRec.status === 'pending_payment') {
@@ -113,8 +121,17 @@ export default function ProfitSharingPage() {
         }
       } catch { /* commissions table may not exist */ }
     }
-    // Revert commission when profit sharing → pending_payment
+    // Revert when profit sharing → pending_payment (undo settled)
     if (next === 'pending_payment') {
+      // Reverse sync: check if ALL profit_sharing for this booking are pending, then revert booking
+      try {
+        const { data: allPs } = await supabase.from('profit_sharing').select('id, status').eq('booking_id', bookingId)
+        const allPending = allPs?.every(p => p.id === existing?.id ? true : p.status === 'pending_payment')
+        if (allPending) {
+          await supabase.from('bookings').update({ payment_status: 'pending_payment' }).eq('id', bookingId)
+        }
+      } catch { /* ignore */ }
+      // Revert commission
       try {
         const { data: commRec } = await supabase.from('commissions').select('id, status').eq('booking_id', bookingId).eq('month', monthKey).single()
         if (commRec && commRec.status === 'waiting_to_be_paid') {
