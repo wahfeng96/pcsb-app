@@ -19,7 +19,12 @@ const navItems = [
   { href: '/remarks', label: 'Remarks', icon: StickyNote },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  className?: string
+  onNavigate?: () => void
+}
+
+export function Sidebar({ className, onNavigate }: SidebarProps) {
   const pathname = usePathname()
   const supabase = createClient()
 
@@ -29,7 +34,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="hidden md:flex md:flex-col md:w-56 bg-white border-r border-gray-200 h-screen fixed">
+    <aside className={cn('flex-col w-56 bg-white border-r border-gray-200 h-screen fixed', className)}>
       <div className="p-4 border-b">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center">
@@ -38,13 +43,14 @@ export function Sidebar() {
           <span className="font-semibold text-gray-900">PCSB</span>
         </div>
       </div>
-      <nav className="flex-1 p-3 space-y-1">
+      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
         {navItems.map(item => {
           const active = pathname.startsWith(item.href)
           return (
             <Link
               key={item.href}
               href={item.href}
+              onClick={onNavigate}
               className={cn(
                 'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
                 active ? 'bg-red-50 text-red-600' : 'text-gray-600 hover:bg-gray-50'
