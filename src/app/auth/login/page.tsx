@@ -33,8 +33,8 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-2 w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-lg">PC</span>
+          <div className="mx-auto mb-4">
+            <img src="/pcsb-logo.png" alt="PCSB" className="h-14 w-auto object-contain mx-auto" />
           </div>
           <CardTitle className="text-xl">PCSB Management</CardTitle>
           <CardDescription>Sign in to your account</CardDescription>

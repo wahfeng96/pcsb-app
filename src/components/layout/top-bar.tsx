@@ -1,6 +1,7 @@
 'use client'
 
 import { LogOut } from 'lucide-react'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { useEffect, useState } from 'react'
 import type { Profile } from '@/types/database'
@@ -29,10 +30,7 @@ export function TopBar() {
     <header className="sticky top-0 z-40 bg-white border-b border-gray-200 md:hidden">
       <div className="flex items-center justify-between h-14 px-4">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-sm">PC</span>
-          </div>
-          <span className="font-semibold text-gray-900">PCSB</span>
+          <Image src="/pcsb-logo.png" alt="PCSB" width={100} height={32} className="object-contain h-8 w-auto" />
         </div>
         <div className="flex items-center gap-3">
           {profile && (

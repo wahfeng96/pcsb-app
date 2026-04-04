@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { LayoutDashboard, Calendar, Users, Building2, FileText, BarChart3, HandCoins, Percent, Shield, StickyNote, LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -37,10 +38,7 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
     <aside className={cn('flex-col w-56 bg-white border-r border-gray-200 h-screen fixed', className)}>
       <div className="p-4 border-b">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-sm">PC</span>
-          </div>
-          <span className="font-semibold text-gray-900">PCSB</span>
+          <Image src="/pcsb-logo.png" alt="PCSB" width={120} height={40} className="object-contain h-10 w-auto" />
         </div>
       </div>
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
