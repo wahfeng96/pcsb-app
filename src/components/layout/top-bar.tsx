@@ -28,7 +28,7 @@ export function TopBar() {
 
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-gray-200 md:hidden">
-      <div className="flex items-center justify-between h-14 px-4">
+      <div className="flex items-center justify-between h-14 px-4 pl-14">
         <div className="flex items-center gap-2">
           <Image src="/pcsb-logo.png" alt="PCSB" width={100} height={32} className="object-contain h-8 w-auto" />
         </div>

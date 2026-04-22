@@ -30,9 +30,15 @@ export default function RemarksPage() {
   const supabase = createClient()
 
   const load = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setLoading(false)
+      return
+    }
     const { data } = await supabase
       .from('remarks')
       .select('*')
+      .eq('user_id', user.id)
       .order('pinned', { ascending: false })
       .order('updated_at', { ascending: false })
     setRemarks(data || [])
