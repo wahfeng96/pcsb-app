@@ -343,6 +343,60 @@ export default function AccountsPage() {
         </Button>
       </div>
 
+      {/* Needs Invoice Number — all invoice_sent rows missing invoice number */}
+      {(() => {
+        const missing = monthlyPayments.filter(p => p.status === 'invoice_sent' && !p.invoice_number)
+        if (missing.length === 0) return null
+        return (
+          <Card className="border-blue-300 bg-blue-50">
+            <CardContent className="p-3 space-y-2">
+              <p className="text-xs font-semibold text-blue-700">📨 Invoice Sent — Missing Invoice Number ({missing.length})</p>
+              {missing.map(p => {
+                const booking = bookings.find(b => b.id === p.booking_id)
+                const key = `${p.booking_id}|${p.month}`
+                return (
+                  <div key={p.id} className="flex items-center justify-between bg-white rounded px-2 py-1.5 border border-blue-200">
+                    <div>
+                      <p className="text-xs font-medium">{booking?.brand_name || booking?.client?.company_name || 'Unknown'}</p>
+                      <p className="text-[10px] text-gray-500">{p.month} · RM {p.amount.toLocaleString()}</p>
+                    </div>
+                    {invoiceInputKey === key ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          className="border rounded px-2 py-1 text-xs w-24 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                          placeholder="@1328"
+                          value={invoiceInputValue}
+                          onChange={e => setInvoiceInputValue(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' && invoiceInputValue.trim()) {
+                              const inv = invoiceInputValue.trim()
+                              setInvoiceInputKey(null)
+                              supabase.from('monthly_payments').update({ invoice_number: inv }).eq('id', p.id).then(() => load())
+                            } else if (e.key === 'Escape') { setInvoiceInputKey(null) }
+                          }}
+                          autoFocus
+                        />
+                        <Button size="sm" className="h-7 px-2 text-[10px] bg-blue-600 hover:bg-blue-700" onClick={() => {
+                          const inv = invoiceInputValue.trim()
+                          if (inv) { setInvoiceInputKey(null); supabase.from('monthly_payments').update({ invoice_number: inv }).eq('id', p.id).then(() => load()) }
+                        }}>✓</Button>
+                        <Button size="sm" variant="ghost" className="h-7 px-1 text-[10px]" onClick={() => setInvoiceInputKey(null)}>✕</Button>
+                      </div>
+                    ) : (
+                      <Button size="sm" className="h-7 text-[10px] bg-blue-600 hover:bg-blue-700"
+                        onClick={() => { setInvoiceInputKey(key); setInvoiceInputValue('') }}>
+                        + Inv No.
+                      </Button>
+                    )}
+                  </div>
+                )
+              })}
+            </CardContent>
+          </Card>
+        )
+      })()}
+
       {/* Month navigation */}
       <div className="flex items-center justify-between bg-white rounded-lg border p-2">
         <Button size="icon" variant="ghost" onClick={() => setViewMonth(subMonths(viewMonth, 1))}><ChevronLeft className="h-4 w-4" /></Button>
