@@ -47,6 +47,8 @@ export default function AccountsPage() {
   const [viewMonth, setViewMonth] = useState(startOfMonth(new Date()))
   const [selectedBb, setSelectedBb] = useState<string>('all')
   const [expandedBookings, setExpandedBookings] = useState<Set<string>>(new Set())
+  const [invoiceInputKey, setInvoiceInputKey] = useState<string | null>(null) // "bookingId|monthKey"
+  const [invoiceInputValue, setInvoiceInputValue] = useState('')
   const [expandedCosts, setExpandedCosts] = useState<Set<string>>(new Set())
   const [costFormBb, setCostFormBb] = useState<string | null>(null)
   const [editingCostId, setEditingCostId] = useState<string | null>(null)
@@ -109,11 +111,10 @@ export default function AccountsPage() {
     const currentIdx = PAYMENT_CYCLE_STATUS.indexOf(current)
     const next = PAYMENT_CYCLE_STATUS[(currentIdx + 1) % PAYMENT_CYCLE_STATUS.length]
 
-    // If transitioning to invoice_sent, prompt for invoice number first
+    // If transitioning to invoice_sent, show inline input instead
     if (next === 'invoice_sent' && invoiceNum === undefined) {
-      const num = window.prompt('Enter Invoice Number (e.g. @1328):')
-      if (num === null) return // cancelled
-      await cyclePaymentStatus(bookingId, monthKey, amount, num.trim())
+      setInvoiceInputKey(`${bookingId}|${monthKey}`)
+      setInvoiceInputValue('')
       return
     }
 
@@ -462,6 +463,26 @@ export default function AccountsPage() {
                           <div className="flex items-center gap-2">
                             <p className="text-xs font-bold">RM {(b.monthly_rate || 0).toLocaleString()}</p>
                             {canEdit ? (
+                              invoiceInputKey === `${b.id}|${monthKey}` ? (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="text"
+                                    className="border rounded px-2 py-1 text-xs w-24 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    placeholder="@1328"
+                                    value={invoiceInputValue}
+                                    onChange={e => setInvoiceInputValue(e.target.value)}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter' && invoiceInputValue.trim()) {
+                                        setInvoiceInputKey(null)
+                                        cyclePaymentStatus(b.id, monthKey, b.monthly_rate || 0, invoiceInputValue.trim())
+                                      } else if (e.key === 'Escape') { setInvoiceInputKey(null) }
+                                    }}
+                                    autoFocus
+                                  />
+                                  <Button size="sm" className="h-7 px-2 text-[10px] bg-blue-600 hover:bg-blue-700" onClick={() => { if (invoiceInputValue.trim()) { setInvoiceInputKey(null); cyclePaymentStatus(b.id, monthKey, b.monthly_rate || 0, invoiceInputValue.trim()) } }}>✓</Button>
+                                  <Button size="sm" variant="ghost" className="h-7 px-1 text-[10px]" onClick={() => setInvoiceInputKey(null)}>✕</Button>
+                                </div>
+                              ) : (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -472,6 +493,7 @@ export default function AccountsPage() {
                                 {isProfitShareTriggered(b.id, monthKey) && <Lock className="h-2.5 w-2.5 mr-1" />}
                                 {display.icon} {display.label}{status === 'invoice_sent' && getInvoiceNumber(b.id, monthKey) ? ` · ${getInvoiceNumber(b.id, monthKey)}` : ''}
                               </Button>
+                              )
                             ) : (
                               <Badge variant="outline" className={`text-[10px] ${display.color}`}>{display.icon} {display.label}</Badge>
                             )}
@@ -504,6 +526,26 @@ export default function AccountsPage() {
                                   <div className="flex items-center gap-2">
                                     <span className="text-gray-500">RM {(b.monthly_rate || 0).toLocaleString()}</span>
                                     {canEdit ? (
+                                      invoiceInputKey === `${b.id}|${mKey}` ? (
+                                        <div className="flex items-center gap-1">
+                                          <input
+                                            type="text"
+                                            className="border rounded px-2 py-1 text-xs w-24 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                            placeholder="@1328"
+                                            value={invoiceInputValue}
+                                            onChange={e => setInvoiceInputValue(e.target.value)}
+                                            onKeyDown={e => {
+                                              if (e.key === 'Enter' && invoiceInputValue.trim()) {
+                                                setInvoiceInputKey(null)
+                                                cyclePaymentStatus(b.id, mKey, b.monthly_rate || 0, invoiceInputValue.trim())
+                                              } else if (e.key === 'Escape') { setInvoiceInputKey(null) }
+                                            }}
+                                            autoFocus
+                                          />
+                                          <Button size="sm" className="h-6 px-2 text-[10px] bg-blue-600 hover:bg-blue-700" onClick={() => { if (invoiceInputValue.trim()) { setInvoiceInputKey(null); cyclePaymentStatus(b.id, mKey, b.monthly_rate || 0, invoiceInputValue.trim()) } }}>✓</Button>
+                                          <Button size="sm" variant="ghost" className="h-6 px-1 text-[10px]" onClick={() => setInvoiceInputKey(null)}>✕</Button>
+                                        </div>
+                                      ) : (
                                       <Button
                                         size="sm"
                                         variant="outline"
@@ -514,6 +556,7 @@ export default function AccountsPage() {
                                         {isProfitShareTriggered(b.id, mKey) && <Lock className="h-2.5 w-2.5 mr-1" />}
                                         {mDisplay.icon} {mDisplay.label}{mStatus === 'invoice_sent' && getInvoiceNumber(b.id, mKey) ? ` · ${getInvoiceNumber(b.id, mKey)}` : ''}
                                       </Button>
+                                      )
                                     ) : (
                                       <Badge variant="outline" className={`text-[9px] ${mDisplay.color}`}>{mDisplay.icon} {mDisplay.label}</Badge>
                                     )}
