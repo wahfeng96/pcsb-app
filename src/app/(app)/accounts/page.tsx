@@ -111,12 +111,7 @@ export default function AccountsPage() {
     const currentIdx = PAYMENT_CYCLE_STATUS.indexOf(current)
     const next = PAYMENT_CYCLE_STATUS[(currentIdx + 1) % PAYMENT_CYCLE_STATUS.length]
 
-    // If transitioning to invoice_sent, show inline input instead
-    if (next === 'invoice_sent' && invoiceNum === undefined) {
-      setInvoiceInputKey(`${bookingId}|${monthKey}`)
-      setInvoiceInputValue('')
-      return
-    }
+    // Just proceed — invoice number can be added/edited by tapping the badge after
 
     const existing = monthlyPayments.find(p => p.booking_id === bookingId && p.month === monthKey)
     if (existing) {
@@ -473,16 +468,27 @@ export default function AccountsPage() {
                                     onChange={e => setInvoiceInputValue(e.target.value)}
                                     onKeyDown={e => {
                                       if (e.key === 'Enter' && invoiceInputValue.trim()) {
+                                        const inv = invoiceInputValue.trim()
                                         setInvoiceInputKey(null)
-                                        cyclePaymentStatus(b.id, monthKey, b.monthly_rate || 0, invoiceInputValue.trim())
+                                        // Just save the invoice number without cycling status
+                                        const existing = monthlyPayments.find(p => p.booking_id === b.id && p.month === monthKey)
+                                        if (existing) supabase.from('monthly_payments').update({ invoice_number: inv }).eq('id', existing.id).then(() => load())
                                       } else if (e.key === 'Escape') { setInvoiceInputKey(null) }
                                     }}
                                     autoFocus
                                   />
-                                  <Button size="sm" className="h-7 px-2 text-[10px] bg-blue-600 hover:bg-blue-700" onClick={() => { if (invoiceInputValue.trim()) { setInvoiceInputKey(null); cyclePaymentStatus(b.id, monthKey, b.monthly_rate || 0, invoiceInputValue.trim()) } }}>✓</Button>
+                                  <Button size="sm" className="h-7 px-2 text-[10px] bg-blue-600 hover:bg-blue-700" onClick={() => {
+                                    const inv = invoiceInputValue.trim()
+                                    if (inv) {
+                                      setInvoiceInputKey(null)
+                                      const existing = monthlyPayments.find(p => p.booking_id === b.id && p.month === monthKey)
+                                      if (existing) supabase.from('monthly_payments').update({ invoice_number: inv }).eq('id', existing.id).then(() => load())
+                                    }
+                                  }}>✓</Button>
                                   <Button size="sm" variant="ghost" className="h-7 px-1 text-[10px]" onClick={() => setInvoiceInputKey(null)}>✕</Button>
                                 </div>
                               ) : (
+                              <>
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -493,6 +499,13 @@ export default function AccountsPage() {
                                 {isProfitShareTriggered(b.id, monthKey) && <Lock className="h-2.5 w-2.5 mr-1" />}
                                 {display.icon} {display.label}{status === 'invoice_sent' && getInvoiceNumber(b.id, monthKey) ? ` · ${getInvoiceNumber(b.id, monthKey)}` : ''}
                               </Button>
+                              {status === 'invoice_sent' && !isProfitShareTriggered(b.id, monthKey) && (
+                                <Button size="sm" variant="ghost" className="h-7 px-1 text-[10px] text-blue-500" title="Add/edit invoice number"
+                                  onClick={() => { setInvoiceInputKey(`${b.id}|${monthKey}`); setInvoiceInputValue(getInvoiceNumber(b.id, monthKey) || '') }}>
+                                  ✏️
+                                </Button>
+                              )}
+                              </>
                               )
                             ) : (
                               <Badge variant="outline" className={`text-[10px] ${display.color}`}>{display.icon} {display.label}</Badge>
@@ -536,16 +549,26 @@ export default function AccountsPage() {
                                             onChange={e => setInvoiceInputValue(e.target.value)}
                                             onKeyDown={e => {
                                               if (e.key === 'Enter' && invoiceInputValue.trim()) {
+                                                const inv = invoiceInputValue.trim()
                                                 setInvoiceInputKey(null)
-                                                cyclePaymentStatus(b.id, mKey, b.monthly_rate || 0, invoiceInputValue.trim())
+                                                const existing = monthlyPayments.find(p => p.booking_id === b.id && p.month === mKey)
+                                                if (existing) supabase.from('monthly_payments').update({ invoice_number: inv }).eq('id', existing.id).then(() => load())
                                               } else if (e.key === 'Escape') { setInvoiceInputKey(null) }
                                             }}
                                             autoFocus
                                           />
-                                          <Button size="sm" className="h-6 px-2 text-[10px] bg-blue-600 hover:bg-blue-700" onClick={() => { if (invoiceInputValue.trim()) { setInvoiceInputKey(null); cyclePaymentStatus(b.id, mKey, b.monthly_rate || 0, invoiceInputValue.trim()) } }}>✓</Button>
+                                          <Button size="sm" className="h-6 px-2 text-[10px] bg-blue-600 hover:bg-blue-700" onClick={() => {
+                                            const inv = invoiceInputValue.trim()
+                                            if (inv) {
+                                              setInvoiceInputKey(null)
+                                              const existing = monthlyPayments.find(p => p.booking_id === b.id && p.month === mKey)
+                                              if (existing) supabase.from('monthly_payments').update({ invoice_number: inv }).eq('id', existing.id).then(() => load())
+                                            }
+                                          }}>✓</Button>
                                           <Button size="sm" variant="ghost" className="h-6 px-1 text-[10px]" onClick={() => setInvoiceInputKey(null)}>✕</Button>
                                         </div>
                                       ) : (
+                                      <>
                                       <Button
                                         size="sm"
                                         variant="outline"
@@ -556,6 +579,13 @@ export default function AccountsPage() {
                                         {isProfitShareTriggered(b.id, mKey) && <Lock className="h-2.5 w-2.5 mr-1" />}
                                         {mDisplay.icon} {mDisplay.label}{mStatus === 'invoice_sent' && getInvoiceNumber(b.id, mKey) ? ` · ${getInvoiceNumber(b.id, mKey)}` : ''}
                                       </Button>
+                                      {mStatus === 'invoice_sent' && !isProfitShareTriggered(b.id, mKey) && (
+                                        <Button size="sm" variant="ghost" className="h-6 px-1 text-[10px] text-blue-500" title="Add/edit invoice number"
+                                          onClick={() => { setInvoiceInputKey(`${b.id}|${mKey}`); setInvoiceInputValue(getInvoiceNumber(b.id, mKey) || '') }}>
+                                          ✏️
+                                        </Button>
+                                      )}
+                                      </>
                                       )
                                     ) : (
                                       <Badge variant="outline" className={`text-[9px] ${mDisplay.color}`}>{mDisplay.icon} {mDisplay.label}</Badge>
