@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -47,16 +47,6 @@ export default function AccountsPage() {
   const [viewMonth, setViewMonth] = useState(startOfMonth(new Date()))
   const [selectedBb, setSelectedBb] = useState<string>('all')
   const [expandedBookings, setExpandedBookings] = useState<Set<string>>(new Set())
-  const [invoicePrompt, setInvoicePrompt] = useState<{ bookingId: string; monthKey: string; amount: number } | null>(null)
-  const [invoiceNumberInput, setInvoiceNumberInput] = useState('')
-  const invoiceInputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (invoicePrompt) {
-      // Delay needed for iOS Safari to focus inputs inside fixed dialogs
-      setTimeout(() => invoiceInputRef.current?.focus(), 100)
-    }
-  }, [invoicePrompt])
   const [expandedCosts, setExpandedCosts] = useState<Set<string>>(new Set())
   const [costFormBb, setCostFormBb] = useState<string | null>(null)
   const [editingCostId, setEditingCostId] = useState<string | null>(null)
@@ -121,8 +111,9 @@ export default function AccountsPage() {
 
     // If transitioning to invoice_sent, prompt for invoice number first
     if (next === 'invoice_sent' && invoiceNum === undefined) {
-      setInvoicePrompt({ bookingId, monthKey, amount })
-      setInvoiceNumberInput('')
+      const num = window.prompt('Enter Invoice Number (e.g. @1328):')
+      if (num === null) return // cancelled
+      await cyclePaymentStatus(bookingId, monthKey, amount, num.trim())
       return
     }
 
@@ -412,53 +403,6 @@ export default function AccountsPage() {
           </div>
         </CardContent>
       </Card>
-
-      {/* Invoice Number Prompt Dialog */}
-      {invoicePrompt && (
-        <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40"
-          onPointerDown={e => { if (e.target === e.currentTarget) setInvoicePrompt(null) }}
-        >
-          <div
-            className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl p-5 w-full sm:w-80 space-y-3"
-            onPointerDown={e => e.stopPropagation()}
-          >
-            <p className="font-semibold text-sm">Enter Invoice Number</p>
-            <p className="text-xs text-gray-500">This will mark the payment as <span className="text-blue-600 font-medium">Invoice Sent</span></p>
-            <input
-              ref={invoiceInputRef}
-              type="text"
-              inputMode="text"
-              autoComplete="off"
-              className="w-full border rounded-lg px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
-              placeholder="e.g. @1326"
-              value={invoiceNumberInput}
-              onChange={e => setInvoiceNumberInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && invoiceNumberInput.trim()) {
-                  const { bookingId, monthKey, amount } = invoicePrompt
-                  setInvoicePrompt(null)
-                  cyclePaymentStatus(bookingId, monthKey, amount, invoiceNumberInput.trim())
-                }
-              }}
-            />
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-sm py-3"
-                onClick={() => {
-                  const { bookingId, monthKey, amount } = invoicePrompt
-                  setInvoicePrompt(null)
-                  cyclePaymentStatus(bookingId, monthKey, amount, invoiceNumberInput.trim() || '')
-                }}
-              >
-                Confirm
-              </Button>
-              <Button size="sm" variant="outline" className="text-sm py-3" onClick={() => setInvoicePrompt(null)}>Cancel</Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Per-Billboard with Client Monthly Payments */}
       <h3 className="font-semibold text-sm">Per Billboard</h3>
