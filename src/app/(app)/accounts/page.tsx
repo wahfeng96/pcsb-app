@@ -415,15 +415,22 @@ export default function AccountsPage() {
 
       {/* Invoice Number Prompt Dialog */}
       {invoicePrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl p-5 w-80 space-y-3">
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40"
+          onPointerDown={e => { if (e.target === e.currentTarget) setInvoicePrompt(null) }}
+        >
+          <div
+            className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl p-5 w-full sm:w-80 space-y-3"
+            onPointerDown={e => e.stopPropagation()}
+          >
             <p className="font-semibold text-sm">Enter Invoice Number</p>
             <p className="text-xs text-gray-500">This will mark the payment as <span className="text-blue-600 font-medium">Invoice Sent</span></p>
             <input
               ref={invoiceInputRef}
               type="text"
               inputMode="text"
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              autoComplete="off"
+              className="w-full border rounded-lg px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
               placeholder="e.g. @1326"
               value={invoiceNumberInput}
               onChange={e => setInvoiceNumberInput(e.target.value)}
@@ -438,7 +445,7 @@ export default function AccountsPage() {
             <div className="flex gap-2">
               <Button
                 size="sm"
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-xs"
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-sm py-3"
                 onClick={() => {
                   const { bookingId, monthKey, amount } = invoicePrompt
                   setInvoicePrompt(null)
@@ -447,7 +454,7 @@ export default function AccountsPage() {
               >
                 Confirm
               </Button>
-              <Button size="sm" variant="outline" className="text-xs" onClick={() => setInvoicePrompt(null)}>Cancel</Button>
+              <Button size="sm" variant="outline" className="text-sm py-3" onClick={() => setInvoicePrompt(null)}>Cancel</Button>
             </div>
           </div>
         </div>
