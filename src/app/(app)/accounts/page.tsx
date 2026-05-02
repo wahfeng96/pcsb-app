@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -49,6 +49,14 @@ export default function AccountsPage() {
   const [expandedBookings, setExpandedBookings] = useState<Set<string>>(new Set())
   const [invoicePrompt, setInvoicePrompt] = useState<{ bookingId: string; monthKey: string; amount: number } | null>(null)
   const [invoiceNumberInput, setInvoiceNumberInput] = useState('')
+  const invoiceInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (invoicePrompt) {
+      // Delay needed for iOS Safari to focus inputs inside fixed dialogs
+      setTimeout(() => invoiceInputRef.current?.focus(), 100)
+    }
+  }, [invoicePrompt])
   const [expandedCosts, setExpandedCosts] = useState<Set<string>>(new Set())
   const [costFormBb, setCostFormBb] = useState<string | null>(null)
   const [editingCostId, setEditingCostId] = useState<string | null>(null)
@@ -412,7 +420,9 @@ export default function AccountsPage() {
             <p className="font-semibold text-sm">Enter Invoice Number</p>
             <p className="text-xs text-gray-500">This will mark the payment as <span className="text-blue-600 font-medium">Invoice Sent</span></p>
             <input
-              autoFocus
+              ref={invoiceInputRef}
+              type="text"
+              inputMode="text"
               className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
               placeholder="e.g. @1326"
               value={invoiceNumberInput}
