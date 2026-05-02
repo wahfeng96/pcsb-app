@@ -14,7 +14,7 @@ import { useRole } from '@/lib/hooks/use-role'
 
 type BookingWithRefs = Booking & { client: Client; billboard: Billboard }
 type CostItem = { id: string; billboard_id: string; name: string; amount: number; start_month: string | null; end_month: string | null }
-type MonthlyPayment = { id: string; booking_id: string; month: string; amount: number; status: 'pending_invoice' | 'invoice_sent' | 'completed' }
+type MonthlyPayment = { id: string; booking_id: string; month: string; amount: number; status: 'pending_invoice' | 'invoice_sent' | 'completed'; invoice_number?: string }
 type ProfitShareRecord = { id: string; booking_id?: string; month: string; status: 'pending_payment' | 'waiting_profit_share' | 'settled' }
 
 const PAYMENT_CYCLE_STATUS: MonthlyPayment['status'][] = ['pending_invoice', 'invoice_sent', 'completed']
@@ -47,6 +47,8 @@ export default function AccountsPage() {
   const [viewMonth, setViewMonth] = useState(startOfMonth(new Date()))
   const [selectedBb, setSelectedBb] = useState<string>('all')
   const [expandedBookings, setExpandedBookings] = useState<Set<string>>(new Set())
+  const [invoicePrompt, setInvoicePrompt] = useState<{ bookingId: string; monthKey: string; amount: number } | null>(null)
+  const [invoiceNumberInput, setInvoiceNumberInput] = useState('')
   const [expandedCosts, setExpandedCosts] = useState<Set<string>>(new Set())
   const [costFormBb, setCostFormBb] = useState<string | null>(null)
   const [editingCostId, setEditingCostId] = useState<string | null>(null)
@@ -101,7 +103,7 @@ export default function AccountsPage() {
     return existing?.status || 'pending_invoice'
   }
 
-  async function cyclePaymentStatus(bookingId: string, monthKey: string, amount: number) {
+  async function cyclePaymentStatus(bookingId: string, monthKey: string, amount: number, invoiceNum?: string) {
     // If profit sharing already triggered, status is locked to completed
     if (isProfitShareTriggered(bookingId, monthKey)) return
 
@@ -109,11 +111,22 @@ export default function AccountsPage() {
     const currentIdx = PAYMENT_CYCLE_STATUS.indexOf(current)
     const next = PAYMENT_CYCLE_STATUS[(currentIdx + 1) % PAYMENT_CYCLE_STATUS.length]
 
+    // If transitioning to invoice_sent, prompt for invoice number first
+    if (next === 'invoice_sent' && invoiceNum === undefined) {
+      setInvoicePrompt({ bookingId, monthKey, amount })
+      setInvoiceNumberInput('')
+      return
+    }
+
     const existing = monthlyPayments.find(p => p.booking_id === bookingId && p.month === monthKey)
     if (existing) {
-      await supabase.from('monthly_payments').update({ status: next }).eq('id', existing.id)
+      const updatePayload: Record<string, unknown> = { status: next }
+      if (next === 'invoice_sent' && invoiceNum !== undefined) updatePayload.invoice_number = invoiceNum
+      await supabase.from('monthly_payments').update(updatePayload).eq('id', existing.id)
     } else {
-      await supabase.from('monthly_payments').insert({ booking_id: bookingId, month: monthKey, amount, status: next })
+      const insertPayload: Record<string, unknown> = { booking_id: bookingId, month: monthKey, amount, status: next }
+      if (next === 'invoice_sent' && invoiceNum !== undefined) insertPayload.invoice_number = invoiceNum
+      await supabase.from('monthly_payments').insert(insertPayload)
     }
 
     // When accounts → completed, auto-update profit sharing → waiting_profit_share + booking → settled
@@ -287,6 +300,10 @@ export default function AccountsPage() {
     return { pending, sent, completed }
   }, [billboardSummaries, selectedBb, monthlyPayments, viewMonth])
 
+  function getInvoiceNumber(bookingId: string, monthKey: string): string | undefined {
+    return monthlyPayments.find(p => p.booking_id === bookingId && p.month === monthKey)?.invoice_number
+  }
+
   function handleDownloadReport() {
     const month = format(viewMonth, 'MMMM yyyy')
     const monthKey = format(viewMonth, 'yyyy-MM')
@@ -388,6 +405,44 @@ export default function AccountsPage() {
         </CardContent>
       </Card>
 
+      {/* Invoice Number Prompt Dialog */}
+      {invoicePrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl p-5 w-80 space-y-3">
+            <p className="font-semibold text-sm">Enter Invoice Number</p>
+            <p className="text-xs text-gray-500">This will mark the payment as <span className="text-blue-600 font-medium">Invoice Sent</span></p>
+            <input
+              autoFocus
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              placeholder="e.g. @1326"
+              value={invoiceNumberInput}
+              onChange={e => setInvoiceNumberInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && invoiceNumberInput.trim()) {
+                  const { bookingId, monthKey, amount } = invoicePrompt
+                  setInvoicePrompt(null)
+                  cyclePaymentStatus(bookingId, monthKey, amount, invoiceNumberInput.trim())
+                }
+              }}
+            />
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-xs"
+                onClick={() => {
+                  const { bookingId, monthKey, amount } = invoicePrompt
+                  setInvoicePrompt(null)
+                  cyclePaymentStatus(bookingId, monthKey, amount, invoiceNumberInput.trim() || '')
+                }}
+              >
+                Confirm
+              </Button>
+              <Button size="sm" variant="outline" className="text-xs" onClick={() => setInvoicePrompt(null)}>Cancel</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Per-Billboard with Client Monthly Payments */}
       <h3 className="font-semibold text-sm">Per Billboard</h3>
       <div className="space-y-3">
@@ -454,7 +509,7 @@ export default function AccountsPage() {
                                 title={isProfitShareTriggered(b.id, monthKey) ? 'Auto-completed by Profit Sharing' : ''}
                               >
                                 {isProfitShareTriggered(b.id, monthKey) && <Lock className="h-2.5 w-2.5 mr-1" />}
-                                {display.icon} {display.label}
+                                {display.icon} {display.label}{status === 'invoice_sent' && getInvoiceNumber(b.id, monthKey) ? ` · ${getInvoiceNumber(b.id, monthKey)}` : ''}
                               </Button>
                             ) : (
                               <Badge variant="outline" className={`text-[10px] ${display.color}`}>{display.icon} {display.label}</Badge>
@@ -496,7 +551,7 @@ export default function AccountsPage() {
                                         title={isProfitShareTriggered(b.id, mKey) ? 'Auto-completed by Profit Sharing' : ''}
                                       >
                                         {isProfitShareTriggered(b.id, mKey) && <Lock className="h-2.5 w-2.5 mr-1" />}
-                                        {mDisplay.icon} {mDisplay.label}
+                                        {mDisplay.icon} {mDisplay.label}{mStatus === 'invoice_sent' && getInvoiceNumber(b.id, mKey) ? ` · ${getInvoiceNumber(b.id, mKey)}` : ''}
                                       </Button>
                                     ) : (
                                       <Badge variant="outline" className={`text-[9px] ${mDisplay.color}`}>{mDisplay.icon} {mDisplay.label}</Badge>

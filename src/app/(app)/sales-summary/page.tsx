@@ -11,26 +11,30 @@ import type { Billboard, Booking, Client } from '@/types/database'
 
 type BookingWithRefs = Booking & { client: Client; billboard: Billboard }
 type ProfitShareRecord = { id: string; billboard_id: string; sales_person: string; month: string; amount: number; status: 'pending_payment' | 'waiting_profit_share' | 'settled' }
+type MonthlyPayment = { id: string; booking_id: string; month: string; amount: number; status: string; invoice_number?: string }
 
 export default function SalesSummaryPage() {
   const supabase = createClient()
   const [billboards, setBillboards] = useState<Billboard[]>([])
   const [bookings, setBookings] = useState<BookingWithRefs[]>([])
   const [profitRecords, setProfitRecords] = useState<ProfitShareRecord[]>([])
+  const [monthlyPayments, setMonthlyPayments] = useState<MonthlyPayment[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedBb, setSelectedBb] = useState<string>('all')
   const [startMonth, setStartMonth] = useState(startOfMonth(new Date(new Date().getFullYear(), 0, 1))) // Jan this year
 
   useEffect(() => {
     async function load() {
-      const [bb, bk, pr] = await Promise.all([
+      const [bb, bk, pr, mp] = await Promise.all([
         supabase.from('billboards').select('*').order('name'),
         supabase.from('bookings').select('*, client:clients(*), billboard:billboards(*)').neq('status', 'cancelled').order('start_date'),
         supabase.from('profit_sharing').select('*'),
+        supabase.from('monthly_payments').select('id, booking_id, month, amount, status, invoice_number'),
       ])
       setBillboards(bb.data || [])
       setBookings(bk.data || [])
       setProfitRecords(pr.data || [])
+      setMonthlyPayments(mp.data || [])
       setLoading(false)
     }
     load()
@@ -40,6 +44,12 @@ export default function SalesSummaryPage() {
   function getBookingMonthStatus(bookingId: string, monthKey: string): ProfitShareRecord['status'] {
     const rec = profitRecords.find(r => (r as any).booking_id === bookingId && r.month === monthKey)
     return rec?.status || 'pending_payment'
+  }
+
+  function getInvoiceNumbers(bookingIds: string[], monthKey: string): string[] {
+    return monthlyPayments
+      .filter(p => bookingIds.includes(p.booking_id) && p.month === monthKey && p.invoice_number)
+      .map(p => p.invoice_number!)
   }
 
   // 12 months starting from startMonth
@@ -170,8 +180,12 @@ export default function SalesSummaryPage() {
                       }
                     }
 
+                    const invoiceNums = getInvoiceNumbers(cellBookings.map(cb => cb.bookingId), mKey)
+                    const tooltipText = invoiceNums.length > 0 ? invoiceNums.join(', ') : undefined
+
                     return (
-                      <td key={mKey} className={`px-3 py-2 text-right tabular-nums ${isCurrentMonth ? 'bg-yellow-50' : ''} ${colorClass}`}>
+                      <td key={mKey} className={`px-3 py-2 text-right tabular-nums ${isCurrentMonth ? 'bg-yellow-50' : ''} ${colorClass}`}
+                        title={tooltipText}>
                         {amt > 0 ? amt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
                       </td>
                     )
