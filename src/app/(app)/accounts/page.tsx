@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -48,6 +48,14 @@ export default function AccountsPage() {
   const [selectedBb, setSelectedBb] = useState<string>('all')
   const [expandedBookings, setExpandedBookings] = useState<Set<string>>(new Set())
   const [invoiceInputKey, setInvoiceInputKey] = useState<string | null>(null) // "bookingId|monthKey"
+  const invoiceInputRef = useRef<HTMLInputElement>(null)
+
+  // Focus invoice input on iOS — autoFocus doesn't work on dynamically rendered inputs
+  useEffect(() => {
+    if (invoiceInputKey) {
+      setTimeout(() => { invoiceInputRef.current?.focus() }, 50)
+    }
+  }, [invoiceInputKey])
   const [invoiceInputValue, setInvoiceInputValue] = useState('')
   const [expandedCosts, setExpandedCosts] = useState<Set<string>>(new Set())
   const [costFormBb, setCostFormBb] = useState<string | null>(null)
@@ -375,7 +383,7 @@ export default function AccountsPage() {
                               supabase.from('monthly_payments').update({ invoice_number: inv }).eq('id', p.id).then(() => load())
                             } else if (e.key === 'Escape') { setInvoiceInputKey(null) }
                           }}
-                          autoFocus
+                          ref={invoiceInputRef}
                         />
                         <Button size="sm" className="h-7 px-2 text-[10px] bg-blue-600 hover:bg-blue-700" onClick={() => {
                           const inv = invoiceInputValue.trim()
@@ -517,6 +525,7 @@ export default function AccountsPage() {
                                   <input
                                     type="text"
                                     className="border rounded px-2 py-1 text-xs w-24 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    ref={invoiceInputRef}
                                     placeholder="@1328"
                                     value={invoiceInputValue}
                                     onChange={e => setInvoiceInputValue(e.target.value)}
@@ -529,7 +538,6 @@ export default function AccountsPage() {
                                         if (existing) supabase.from('monthly_payments').update({ invoice_number: inv }).eq('id', existing.id).then(() => load())
                                       } else if (e.key === 'Escape') { setInvoiceInputKey(null) }
                                     }}
-                                    autoFocus
                                   />
                                   <Button size="sm" className="h-7 px-2 text-[10px] bg-blue-600 hover:bg-blue-700" onClick={() => {
                                     const inv = invoiceInputValue.trim()
@@ -598,6 +606,7 @@ export default function AccountsPage() {
                                           <input
                                             type="text"
                                             className="border rounded px-2 py-1 text-xs w-24 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                            ref={invoiceInputRef}
                                             placeholder="@1328"
                                             value={invoiceInputValue}
                                             onChange={e => setInvoiceInputValue(e.target.value)}
@@ -609,7 +618,6 @@ export default function AccountsPage() {
                                                 if (existing) supabase.from('monthly_payments').update({ invoice_number: inv }).eq('id', existing.id).then(() => load())
                                               } else if (e.key === 'Escape') { setInvoiceInputKey(null) }
                                             }}
-                                            autoFocus
                                           />
                                           <Button size="sm" className="h-6 px-2 text-[10px] bg-blue-600 hover:bg-blue-700" onClick={() => {
                                             const inv = invoiceInputValue.trim()
