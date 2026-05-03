@@ -351,36 +351,23 @@ export default function AccountsPage() {
         </Button>
       </div>
 
-      {/* Needs Invoice Number — grouped by booking (one entry per booking, applies to all months) */}
+      {/* Needs Invoice Number — per month row, one entry per monthly payment */}
       {(() => {
         const missing = monthlyPayments.filter(p => p.status === 'invoice_sent' && !p.invoice_number)
         if (missing.length === 0) return null
-        // Group by booking_id
-        const grouped = new Map<string, { booking_id: string; months: string[]; ids: string[]; totalAmt: number }>()
-        missing.forEach(p => {
-          if (!grouped.has(p.booking_id)) {
-            grouped.set(p.booking_id, { booking_id: p.booking_id, months: [], ids: [], totalAmt: 0 })
-          }
-          const g = grouped.get(p.booking_id)!
-          g.months.push(p.month)
-          g.ids.push(p.id)
-          g.totalAmt += p.amount
-        })
-        const groups = Array.from(grouped.values())
         return (
           <Card className="border-blue-300 bg-blue-50">
             <CardContent className="p-3 space-y-2">
-              <p className="text-xs font-semibold text-blue-700">📨 Invoice Sent — Missing Invoice Number ({groups.length} booking{groups.length > 1 ? 's' : ''})</p>
-              {groups.map(g => {
-                const booking = bookings.find(b => b.id === g.booking_id)
+              <p className="text-xs font-semibold text-blue-700">📨 Invoice Sent — Missing Invoice Number ({missing.length})</p>
+              {missing.map(p => {
+                const booking = bookings.find(b => b.id === p.booking_id)
                 const clientName = booking?.brand_name || booking?.client?.company_name || 'Unknown'
-                const monthsLabel = g.months.sort().join(', ')
-                const key = g.booking_id
+                const key = `${p.booking_id}|${p.month}`
                 return (
-                  <div key={g.booking_id} className="flex items-center justify-between bg-white rounded px-2 py-1.5 border border-blue-200">
+                  <div key={p.id} className="flex items-center justify-between bg-white rounded px-2 py-1.5 border border-blue-200">
                     <div>
                       <p className="text-xs font-medium">{clientName}</p>
-                      <p className="text-[10px] text-gray-500">{monthsLabel} · RM {g.totalAmt.toLocaleString()}</p>
+                      <p className="text-[10px] text-gray-500">{p.month} · RM {p.amount.toLocaleString()}</p>
                     </div>
                     {invoiceInputKey === key ? (
                       <div className="flex items-center gap-1">
@@ -391,22 +378,17 @@ export default function AccountsPage() {
                           placeholder="e.g. @1326"
                           value={invoiceInputValue}
                           onChange={e => setInvoiceInputValue(e.target.value)}
-                          onKeyDown={async e => {
+                          onKeyDown={e => {
                             if (e.key === 'Enter' && invoiceInputValue.trim()) {
                               const inv = invoiceInputValue.trim()
                               setInvoiceInputKey(null)
-                              await supabase.from('monthly_payments').update({ invoice_number: inv }).in('id', g.ids)
-                              load()
+                              supabase.from('monthly_payments').update({ invoice_number: inv }).eq('id', p.id).then(() => load())
                             } else if (e.key === 'Escape') { setInvoiceInputKey(null) }
                           }}
                         />
-                        <Button size="sm" className="h-7 px-2 text-[10px] bg-blue-600 hover:bg-blue-700" onClick={async () => {
+                        <Button size="sm" className="h-7 px-2 text-[10px] bg-blue-600 hover:bg-blue-700" onClick={() => {
                           const inv = invoiceInputValue.trim()
-                          if (inv) {
-                            setInvoiceInputKey(null)
-                            await supabase.from('monthly_payments').update({ invoice_number: inv }).in('id', g.ids)
-                            load()
-                          }
+                          if (inv) { setInvoiceInputKey(null); supabase.from('monthly_payments').update({ invoice_number: inv }).eq('id', p.id).then(() => load()) }
                         }}>✓</Button>
                         <Button size="sm" variant="ghost" className="h-7 px-1 text-[10px]" onClick={() => setInvoiceInputKey(null)}>✕</Button>
                       </div>
