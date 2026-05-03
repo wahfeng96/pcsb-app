@@ -560,9 +560,9 @@ export default function AccountsPage() {
                                 title={isProfitShareTriggered(b.id, monthKey) ? 'Auto-completed by Profit Sharing' : ''}
                               >
                                 {isProfitShareTriggered(b.id, monthKey) && <Lock className="h-2.5 w-2.5 mr-1" />}
-                                {display.icon} {display.label}{status === 'invoice_sent' && getInvoiceNumber(b.id, monthKey) ? ` · ${getInvoiceNumber(b.id, monthKey)}` : ''}
+                                {display.icon} {display.label}{(status === 'invoice_sent' || status === 'completed') && getInvoiceNumber(b.id, monthKey) ? ` · ${getInvoiceNumber(b.id, monthKey)}` : ''}
                               </Button>
-                              {status === 'invoice_sent' && !isProfitShareTriggered(b.id, monthKey) && (
+                              {(status === 'invoice_sent' || status === 'completed') && !isProfitShareTriggered(b.id, monthKey) && (
                                 <Button size="sm" variant="ghost" className="h-7 px-1 text-[10px] text-blue-500" title="Add/edit invoice number"
                                   onClick={() => { setInvoiceInputKey(`${b.id}|${monthKey}`); setInvoiceInputValue(getInvoiceNumber(b.id, monthKey) || '') }}>
                                   ✏️
@@ -640,9 +640,9 @@ export default function AccountsPage() {
                                         title={isProfitShareTriggered(b.id, mKey) ? 'Auto-completed by Profit Sharing' : ''}
                                       >
                                         {isProfitShareTriggered(b.id, mKey) && <Lock className="h-2.5 w-2.5 mr-1" />}
-                                        {mDisplay.icon} {mDisplay.label}{mStatus === 'invoice_sent' && getInvoiceNumber(b.id, mKey) ? ` · ${getInvoiceNumber(b.id, mKey)}` : ''}
+                                        {mDisplay.icon} {mDisplay.label}{(mStatus === 'invoice_sent' || mStatus === 'completed') && getInvoiceNumber(b.id, mKey) ? ` · ${getInvoiceNumber(b.id, mKey)}` : ''}
                                       </Button>
-                                      {mStatus === 'invoice_sent' && !isProfitShareTriggered(b.id, mKey) && (
+                                      {(mStatus === 'invoice_sent' || mStatus === 'completed') && !isProfitShareTriggered(b.id, mKey) && (
                                         <Button size="sm" variant="ghost" className="h-6 px-1 text-[10px] text-blue-500" title="Add/edit invoice number"
                                           onClick={() => { setInvoiceInputKey(`${b.id}|${mKey}`); setInvoiceInputValue(getInvoiceNumber(b.id, mKey) || '') }}>
                                           ✏️
