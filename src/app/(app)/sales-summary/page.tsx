@@ -181,12 +181,14 @@ export default function SalesSummaryPage() {
                     }
 
                     const invoiceNums = getInvoiceNumbers(cellBookings.map(cb => cb.bookingId), mKey)
-                    const tooltipText = invoiceNums.length > 0 ? invoiceNums.join(', ') : undefined
+                    const uniqueInvNums = [...new Set(invoiceNums)]
 
                     return (
-                      <td key={mKey} className={`px-3 py-2 text-right tabular-nums ${isCurrentMonth ? 'bg-yellow-50' : ''} ${colorClass}`}
-                        title={tooltipText}>
-                        {amt > 0 ? amt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}
+                      <td key={mKey} className={`px-3 py-2 text-right tabular-nums ${isCurrentMonth ? 'bg-yellow-50' : ''} ${colorClass}`}>
+                        <div>{amt > 0 ? amt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</div>
+                        {uniqueInvNums.length > 0 && (
+                          <div className="text-[9px] text-gray-400 font-normal">{uniqueInvNums.join(', ')}</div>
+                        )}
                       </td>
                     )
                   })}
