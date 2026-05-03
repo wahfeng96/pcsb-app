@@ -47,8 +47,9 @@ export default function SalesSummaryPage() {
   }
 
   function getInvoiceNumbers(bookingIds: string[], monthKey: string): string[] {
+    // Look across all months for this booking — payment row month may differ from revenue month
     return monthlyPayments
-      .filter(p => bookingIds.includes(p.booking_id) && p.month === monthKey && p.invoice_number)
+      .filter(p => bookingIds.includes(p.booking_id) && p.invoice_number)
       .map(p => p.invoice_number!)
   }
 
