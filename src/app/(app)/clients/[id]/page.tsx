@@ -153,7 +153,7 @@ export default function ClientDetailPage() {
         await supabase.from('commissions').insert(
           months.map(m => {
             const mKey = format(m, 'yyyy-MM')
-            return { booking_id: bookingId, month: mKey, amount: commAmt, status: existingStatusByMonth.get(mKey) || 'pending_payment' }
+            return { booking_id: bookingId, month: mKey, amount: commAmt, status: existingStatusByMonth.get(mKey) || (bookingData.payment_status !== 'pending_payment' ? 'waiting_to_be_paid' : 'pending_payment') }
           })
         )
       } else {
