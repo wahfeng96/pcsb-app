@@ -98,7 +98,7 @@ export default function ProfitSharingPage() {
       alert('Error: ' + result.error.message)
       return
     }
-    // Auto-sync when profit sharing → waiting_profit_share (means client paid)
+    // Auto-sync account payment only; commission status is managed manually on Commission page
     if (next === 'waiting_profit_share') {
       // Reverse sync: auto-update booking → settled
       try {
@@ -107,19 +107,6 @@ export default function ProfitSharingPage() {
           await supabase.from('bookings').update({ payment_status: 'settled' }).eq('id', bookingId)
         }
       } catch { /* ignore */ }
-      // Auto-sync commission → waiting_to_be_paid
-      try {
-        const { data: commRec } = await supabase.from('commissions').select('id, status').eq('booking_id', bookingId).eq('month', monthKey).single()
-        if (commRec && commRec.status === 'pending_payment') {
-          await supabase.from('commissions').update({ status: 'waiting_to_be_paid' }).eq('id', commRec.id)
-        } else if (!commRec) {
-          const { data: bk } = await supabase.from('bookings').select('monthly_rate, commission_percent').eq('id', bookingId).single()
-          if (bk && bk.commission_percent > 0) {
-            const commAmt = bk.monthly_rate * bk.commission_percent / 100
-            await supabase.from('commissions').insert({ booking_id: bookingId, month: monthKey, amount: commAmt, status: 'waiting_to_be_paid' })
-          }
-        }
-      } catch { /* commissions table may not exist */ }
     }
     // Revert when profit sharing → pending_payment (undo settled)
     if (next === 'pending_payment') {
@@ -131,13 +118,6 @@ export default function ProfitSharingPage() {
           await supabase.from('bookings').update({ payment_status: 'pending_payment' }).eq('id', bookingId)
         }
       } catch { /* ignore */ }
-      // Revert commission
-      try {
-        const { data: commRec } = await supabase.from('commissions').select('id, status').eq('booking_id', bookingId).eq('month', monthKey).single()
-        if (commRec && commRec.status === 'waiting_to_be_paid') {
-          await supabase.from('commissions').update({ status: 'pending_payment' }).eq('id', commRec.id)
-        }
-      } catch { /* commissions table may not exist */ }
     }
 
     // Optimistic update

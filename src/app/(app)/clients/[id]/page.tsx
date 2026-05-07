@@ -146,17 +146,14 @@ export default function ClientDetailPage() {
     try {
       if (commission_percent > 0 && months.length > 0) {
         const { data: existingComm } = await supabase.from('commissions').select('month, status').eq('booking_id', bookingId)
-        const settledMonths = new Set((existingComm || []).filter((c: any) => c.status === 'settled').map((c: any) => c.month))
+        const existingStatusByMonth = new Map((existingComm || []).map((c: any) => [c.month, c.status]))
 
         await supabase.from('commissions').delete().eq('booking_id', bookingId)
         const commAmt = bookingData.monthly_rate * commission_percent / 100
         await supabase.from('commissions').insert(
           months.map(m => {
             const mKey = format(m, 'yyyy-MM')
-            let commStatus = 'pending_payment'
-            if (settledMonths.has(mKey)) commStatus = 'settled'
-            else if (bookingData.payment_status !== 'pending_payment') commStatus = 'waiting_to_be_paid'
-            return { booking_id: bookingId, month: mKey, amount: commAmt, status: commStatus }
+            return { booking_id: bookingId, month: mKey, amount: commAmt, status: existingStatusByMonth.get(mKey) || 'pending_payment' }
           })
         )
       } else {

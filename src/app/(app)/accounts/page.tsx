@@ -147,19 +147,6 @@ export default function AccountsPage() {
           await supabase.from('bookings').update({ payment_status: 'settled' }).eq('id', bookingId)
         }
       } catch { /* ignore */ }
-      // Auto-sync commission → waiting_to_be_paid
-      try {
-        const { data: commRec } = await supabase.from('commissions').select('id, status').eq('booking_id', bookingId).eq('month', monthKey).single()
-        if (commRec && commRec.status === 'pending_payment') {
-          await supabase.from('commissions').update({ status: 'waiting_to_be_paid' }).eq('id', commRec.id)
-        } else if (!commRec) {
-          const { data: bk2 } = await supabase.from('bookings').select('monthly_rate, commission_percent').eq('id', bookingId).single()
-          if (bk2 && bk2.commission_percent > 0) {
-            const commAmt = bk2.monthly_rate * bk2.commission_percent / 100
-            await supabase.from('commissions').insert({ booking_id: bookingId, month: monthKey, amount: commAmt, status: 'waiting_to_be_paid' })
-          }
-        }
-      } catch { /* commissions table may not exist */ }
     }
     // When accounts cycles back from completed, revert profit sharing → pending_payment
     if (current === 'completed' && next === 'pending_invoice') {
@@ -167,13 +154,6 @@ export default function AccountsPage() {
       if (pr && pr.status === 'waiting_profit_share') {
         await supabase.from('profit_sharing').update({ status: 'pending_payment' }).eq('id', pr.id)
       }
-      // Revert commission → pending_payment
-      try {
-        const { data: commRec } = await supabase.from('commissions').select('id, status').eq('booking_id', bookingId).eq('month', monthKey).single()
-        if (commRec && commRec.status === 'waiting_to_be_paid') {
-          await supabase.from('commissions').update({ status: 'pending_payment' }).eq('id', commRec.id)
-        }
-      } catch { /* commissions table may not exist */ }
     }
 
     load()

@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState, useMemo, useRef } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Lock } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react'
 import { format, parseISO, isSameMonth } from 'date-fns'
 import { getRevenueMonths } from '@/lib/booking-utils'
 import type { Billboard, Booking, Client, CommissionStatus } from '@/types/database'
@@ -14,7 +14,6 @@ import { useRole } from '@/lib/hooks/use-role'
 
 type BookingWithRefs = Booking & { client: Client; billboard: Billboard }
 type CommissionRecord = { id: string; booking_id: string; month: string; amount: number; status: CommissionStatus }
-type ProfitShareRecord = { id: string; booking_id?: string; month: string; status: string }
 
 const STATUS_CYCLE: CommissionStatus[] = ['pending_payment', 'waiting_to_be_paid', 'settled']
 
@@ -24,64 +23,31 @@ export default function CommissionPage() {
   const [billboards, setBillboards] = useState<Billboard[]>([])
   const [bookings, setBookings] = useState<BookingWithRefs[]>([])
   const [commissions, setCommissions] = useState<CommissionRecord[]>([])
-  const [profitRecords, setProfitRecords] = useState<ProfitShareRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedBb, setSelectedBb] = useState<string>('all')
   const [filterYear, setFilterYear] = useState(new Date().getFullYear())
   const [filterMonth, setFilterMonth] = useState<number | 'all'>('all')
   const [expandedSales, setExpandedSales] = useState<Set<string>>(new Set())
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set())
-  const autoSyncDone = useRef(false)
 
   async function load() {
-    const [bb, bk, cm, pr] = await Promise.all([
+    const [bb, bk, cm] = await Promise.all([
       supabase.from('billboards').select('*').order('name'),
       supabase.from('bookings').select('*, client:clients(*), billboard:billboards(*)').neq('status', 'cancelled').order('start_date'),
       supabase.from('commissions').select('*'),
-      supabase.from('profit_sharing').select('id, booking_id, month, status'),
     ])
     setBillboards(bb.data || [])
     setBookings(bk.data || [])
     setCommissions(cm.data || [])
-    setProfitRecords(pr.data || [])
     setLoading(false)
-    return { commissions: cm.data || [], profitRecords: pr.data || [] }
+    return { commissions: cm.data || [] }
   }
 
   useEffect(() => { load() }, [])
 
-  // Auto-sync: if profit_sharing is waiting/settled but commission is still pending → auto-update
-  useEffect(() => {
-    if (loading || autoSyncDone.current || commissions.length === 0) return
-    autoSyncDone.current = true
-
-    const toUpdate = commissions.filter(c => {
-      if (c.status !== 'pending_payment') return false
-      const pr = profitRecords.find(r => r.booking_id === c.booking_id && r.month === c.month)
-      return pr?.status === 'waiting_profit_share' || pr?.status === 'settled'
-    })
-
-    if (toUpdate.length > 0) {
-      Promise.all(toUpdate.map(c =>
-        supabase.from('commissions').update({ status: 'waiting_to_be_paid' }).eq('id', c.id)
-      )).then(() => {
-        // Optimistic update
-        setCommissions(prev => prev.map(c =>
-          toUpdate.some(u => u.id === c.id) ? { ...c, status: 'waiting_to_be_paid' as CommissionStatus } : c
-        ))
-      })
-    }
-  }, [loading, commissions, profitRecords])
-
   function getCommissionStatus(bookingId: string, monthKey: string): CommissionStatus {
     const rec = commissions.find(c => c.booking_id === bookingId && c.month === monthKey)
     return rec?.status || 'pending_payment'
-  }
-
-  function isAutoLinked(bookingId: string, monthKey: string): boolean {
-    const pr = profitRecords.find(r => r.booking_id === bookingId && r.month === monthKey)
-    const status = getCommissionStatus(bookingId, monthKey)
-    return status === 'waiting_to_be_paid' && (pr?.status === 'waiting_profit_share' || pr?.status === 'settled')
   }
 
   async function cycleStatus(bookingId: string, monthKey: string, amount: number) {
@@ -319,8 +285,6 @@ export default function CommissionPage() {
                                   {mb.clients.map((client, idx) => {
                                     const cStatus = getCommissionStatus(client.bookingId, monthKey)
                                     const cDisplay = COMMISSION_STATUS_CONFIG[cStatus]
-                                    const autoLinked = isAutoLinked(client.bookingId, monthKey)
-
                                     return (
                                       <div key={`${client.bookingId}-${idx}`} className="flex items-center justify-between px-5 py-1.5 border-t border-gray-100">
                                         <div>
@@ -336,7 +300,6 @@ export default function CommissionPage() {
                                               className={`text-[9px] h-5 px-1.5 ${cDisplay.color}`}
                                               onClick={(e) => { e.stopPropagation(); cycleStatus(client.bookingId, monthKey, client.commissionAmt) }}
                                             >
-                                              {autoLinked && <Lock className="h-2.5 w-2.5 mr-0.5" />}
                                               {cDisplay.icon} {cDisplay.label}
                                             </Button>
                                           ) : (
