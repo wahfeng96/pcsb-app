@@ -11,6 +11,7 @@ import { Edit2, DollarSign, Plus, Trash2, ChevronDown, ChevronUp, ChevronLeft, C
 import { computeBookingStatus } from '@/lib/booking-utils'
 import { format, parseISO, startOfMonth, endOfMonth, addMonths, subMonths, differenceInMonths, isSameMonth, isWithinInterval } from 'date-fns'
 import { getRevenueMonths } from '@/lib/booking-utils'
+import { DIGITAL_SCREEN_MAX_SLOTS, getBillboardMaxSlots } from '@/lib/billboard-slots'
 import type { Billboard, Booking, Client, Profile } from '@/types/database'
 import { BOOKING_STATUS_CONFIG } from '@/types/database'
 import { useRole } from '@/lib/hooks/use-role'
@@ -63,7 +64,7 @@ export default function BillboardsPage() {
   const [newCost, setNewCost] = useState({ name: '', amount: 0, start_month: '', end_month: '' })
   const [viewMonth, setViewMonth] = useState(startOfMonth(new Date()))
   const [showAddBb, setShowAddBb] = useState(false)
-  const [bbForm, setBbForm] = useState({ name: '', location: '', max_slots: 15, description: '' })
+  const [bbForm, setBbForm] = useState({ name: '', location: '', max_slots: DIGITAL_SCREEN_MAX_SLOTS, description: '' })
 
   async function load() {
     const [bb, bk, pr, cs, auth] = await Promise.all([
@@ -98,7 +99,7 @@ export default function BillboardsPage() {
     if (!bbForm.name.trim()) return
     await supabase.from('billboards').insert({ name: bbForm.name, location: bbForm.location, max_slots: bbForm.max_slots, description: bbForm.description || null })
     setShowAddBb(false)
-    setBbForm({ name: '', location: '', max_slots: 15, description: '' })
+    setBbForm({ name: '', location: '', max_slots: DIGITAL_SCREEN_MAX_SLOTS, description: '' })
     load()
   }
 
@@ -208,7 +209,7 @@ export default function BillboardsPage() {
             <form onSubmit={handleAddBillboard} className="space-y-3">
               <div><Label>Name</Label><Input placeholder="e.g. KK Landmark - Panel C" value={bbForm.name} onChange={e => setBbForm(f => ({ ...f, name: e.target.value }))} required /></div>
               <div><Label>Location</Label><Input placeholder="e.g. Kota Kinabalu" value={bbForm.location} onChange={e => setBbForm(f => ({ ...f, location: e.target.value }))} /></div>
-              <div><Label>Max Slots</Label><Input type="number" min={1} max={20} value={bbForm.max_slots} onChange={e => setBbForm(f => ({ ...f, max_slots: +e.target.value }))} /></div>
+              <div><Label>Max Slots</Label><Input type="number" min={1} max={DIGITAL_SCREEN_MAX_SLOTS} value={bbForm.max_slots} onChange={e => setBbForm(f => ({ ...f, max_slots: +e.target.value }))} /></div>
               <div><Label>Description (optional)</Label><Input placeholder="Notes about this billboard" value={bbForm.description} onChange={e => setBbForm(f => ({ ...f, description: e.target.value }))} /></div>
               <Button type="submit" className="w-full bg-red-600 hover:bg-red-700">Add Billboard</Button>
             </form>
@@ -229,6 +230,9 @@ export default function BillboardsPage() {
       <div className="space-y-4">
         {billboards.map(bb => {
           const active = bookings.filter(b => b.billboard_id === bb.id && (computeBookingStatus(b.start_date, b.end_date, b.status) === 'live' || computeBookingStatus(b.start_date, b.end_date, b.status) === 'upcoming'))
+          const activeSlots = active.reduce((sum, b) => sum + (b.spot_size || 1), 0)
+          const activeSlotsDisplay = activeSlots % 1 === 0 ? activeSlots : activeSlots.toFixed(1)
+          const maxSlots = getBillboardMaxSlots(bb)
           const bbCosts = costs.filter(c => c.billboard_id === bb.id)
           const monthly = getMonthlyFigures(bb, viewMonth)
           const total = getTotalFigures(bb)
@@ -245,7 +249,7 @@ export default function BillboardsPage() {
                     <p className="text-sm text-gray-500">{bb.location}</p>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Badge variant="secondary">{active.length}/{bb.max_slots} slots</Badge>
+                    <Badge variant="secondary">{activeSlotsDisplay}/{maxSlots} slots</Badge>
                     {canEdit && <Button size="icon" variant="ghost" onClick={() => { setEditingBb(isEditing ? null : bb.id); setEditForm({ partner_id: bb.partner_id || '', profit_share_percent: bb.profit_share_percent || 0 }) }}><Edit2 className="h-4 w-4" /></Button>}
                     {canEdit && <Button size="icon" variant="ghost" className="text-red-600" onClick={() => handleDeleteBillboard(bb.id)}><Trash2 className="h-4 w-4" /></Button>}
                   </div>

@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ArrowLeft, Edit2, Plus, Trash2, Phone, Mail, MapPin, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { format, parseISO, differenceInMonths, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns'
 import { getRevenueMonths, computeBookingStatus } from '@/lib/booking-utils'
+import { getBillboardMaxSlots } from '@/lib/billboard-slots'
 import type { Client, ClientStage, Booking, Billboard, BookingStatus, PaymentStatus } from '@/types/database'
 import { BOOKING_STATUS_CONFIG, PAYMENT_STATUS_CONFIG } from '@/types/database'
 import Link from 'next/link'
@@ -199,6 +200,9 @@ export default function ClientDetailPage() {
     load()
   }
 
+  const selectedBillboard = billboards.find(b => b.id === bookingForm.billboard_id)
+  const selectedMaxSlots = getBillboardMaxSlots(selectedBillboard)
+
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600" /></div>
   if (!client) return <div className="p-8 text-center text-gray-500">Client not found</div>
 
@@ -300,7 +304,11 @@ export default function ClientDetailPage() {
             <h3 className="font-semibold mb-3">{editingBookingId ? 'Edit Booking' : 'Add Booking'}</h3>
             <form onSubmit={handleAddBooking} className="space-y-3">
               <div><Label>Billboard</Label>
-                <select className="w-full border rounded-md px-3 py-2 text-sm" value={bookingForm.billboard_id} onChange={e => setBookingForm(f => ({ ...f, billboard_id: e.target.value }))}>
+                <select className="w-full border rounded-md px-3 py-2 text-sm" value={bookingForm.billboard_id} onChange={e => {
+                  const nextBillboard = billboards.find(b => b.id === e.target.value)
+                  const maxSlots = getBillboardMaxSlots(nextBillboard)
+                  setBookingForm(f => ({ ...f, billboard_id: e.target.value, slot_number: Math.min(f.slot_number || 1, maxSlots) }))
+                }}>
                   {billboards.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </select>
               </div>
@@ -385,7 +393,7 @@ export default function ClientDetailPage() {
                 <div><Label>Total (RM)</Label><Input type="number" value={bookingForm.total_amount || ''} readOnly className="bg-gray-50" /></div>
               </div>
               )}
-              <div><Label>Slot Number</Label><Input type="number" min={1} max={15} value={bookingForm.slot_number} onChange={e => setBookingForm(f => ({ ...f, slot_number: +e.target.value }))} /></div>
+              <div><Label>Slot Number</Label><Input type="number" min={1} max={selectedMaxSlots} value={bookingForm.slot_number} onChange={e => setBookingForm(f => ({ ...f, slot_number: Math.min(+e.target.value, selectedMaxSlots) }))} /></div>
               <div><Label>Payment Status</Label>
                 <select className="w-full border rounded-md px-3 py-2 text-sm" value={bookingForm.payment_status} onChange={e => setBookingForm(f => ({ ...f, payment_status: e.target.value as PaymentStatus }))}>
                   <option value="pending_payment">Pending Payment</option>

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Building2, Users, CalendarDays, DollarSign } from 'lucide-react'
 import { format, addDays, isWithinInterval, startOfMonth, endOfMonth } from 'date-fns'
 import { computeBookingStatus } from '@/lib/booking-utils'
+import { getBillboardMaxSlots } from '@/lib/billboard-slots'
 import type { Billboard, Booking, Client } from '@/types/database'
 import { BOOKING_STATUS_CONFIG, PAYMENT_STATUS_CONFIG } from '@/types/database'
 import Link from 'next/link'
@@ -172,7 +173,8 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {billboards.map(bb => {
             const { count, brands } = getOccupancy(bb.id)
-            const pct = Math.min((count / bb.max_slots) * 100, 100)
+            const maxSlots = getBillboardMaxSlots(bb)
+            const pct = Math.min((count / maxSlots) * 100, 100)
             const revenue = getActiveRevenue(bb.id)
             const countDisplay = count % 1 === 0 ? count : count.toFixed(1)
             return (
@@ -183,7 +185,7 @@ export default function DashboardPage() {
                       <p className="font-medium text-sm">{bb.name}</p>
                       <p className="text-xs text-gray-500">{bb.location}</p>
                     </div>
-                    <span className={`text-lg font-bold ${count >= bb.max_slots ? 'text-red-600' : count > 0 ? 'text-green-700' : 'text-gray-400'}`}>{countDisplay}/{bb.max_slots}</span>
+                    <span className={`text-lg font-bold ${count >= maxSlots ? 'text-red-600' : count > 0 ? 'text-green-700' : 'text-gray-400'}`}>{countDisplay}/{maxSlots}</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
                     <div className={`h-2.5 rounded-full transition-all ${pct >= 90 ? 'bg-red-600' : pct >= 50 ? 'bg-yellow-500' : 'bg-green-500'}`} style={{ width: `${pct}%` }} />
