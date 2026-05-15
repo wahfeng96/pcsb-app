@@ -5,10 +5,10 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'PCSB Management',
+  title: 'PCSB WebApp',
   description: 'Penjenamaan Canggih Sdn Bhd - Billboard Management System',
   manifest: '/manifest.json',
-  applicationName: 'PCSB',
+  applicationName: 'PCSB WebApp',
   appleWebApp: {
     capable: true,
     title: 'PCSB',
