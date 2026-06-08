@@ -66,6 +66,19 @@ export interface Booking {
   billboard?: Billboard
 }
 
+export interface ContentChange {
+  id: string
+  brand_name: string
+  billboard_id: string
+  change_date: string
+  notes: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  // joined
+  billboard?: Billboard
+}
+
 export interface ActivityLog {
   id: string
   user_id: string
