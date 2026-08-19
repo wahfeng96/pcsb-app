@@ -12,6 +12,7 @@ import { ChevronLeft, ChevronRight, Plus, Trash2, X } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, subMonths, parseISO, isSameDay } from 'date-fns'
 import type { Booking, Client, Billboard, ContentChange } from '@/types/database'
 import { computeBookingStatus } from '@/lib/booking-utils'
+import { getBillboardMaxSlots } from '@/lib/billboard-slots'
 
 type BookingWithRefs = Booking & { client: Client; billboard: Billboard }
 type ContentChangeWithRefs = ContentChange & { billboard: Billboard }
@@ -23,6 +24,7 @@ export default function CalendarPage() {
   const [billboards, setBillboards] = useState<Billboard[]>([])
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedBillboard, setSelectedBillboard] = useState<string>('all')
+  const [occupancyBillboard, setOccupancyBillboard] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
@@ -37,6 +39,7 @@ export default function CalendarPage() {
     ])
     setBookings(bk.data || [])
     setBillboards(bb.data || [])
+    setOccupancyBillboard(current => current || bb.data?.[0]?.id || '')
     setContentChanges(cc.data || [])
     setLoading(false)
   }
@@ -76,6 +79,28 @@ export default function CalendarPage() {
 
   function getContentChangesForDay(date: Date) {
     return filteredContentChanges.filter(c => isSameDay(date, parseISO(c.change_date)))
+  }
+
+  const selectedOccupancyScreen = billboards.find(bb => bb.id === occupancyBillboard)
+  const occupancyMaxSlots = getBillboardMaxSlots(selectedOccupancyScreen)
+
+  function getOccupancyForDay(date: Date) {
+    const dateString = format(date, 'yyyy-MM-dd')
+    return bookings
+      .filter(b =>
+        b.billboard_id === occupancyBillboard &&
+        computeBookingStatus(b.start_date, b.end_date, b.status) !== 'cancelled' &&
+        b.start_date <= dateString &&
+        b.end_date >= dateString
+      )
+      .reduce((sum, b) => sum + (b.spot_size || 1), 0)
+  }
+
+  function getOccupancyColour(occupied: number) {
+    const percentage = occupancyMaxSlots > 0 ? (occupied / occupancyMaxSlots) * 100 : 0
+    if (percentage >= 90) return 'bg-red-100 text-red-800 border-red-300'
+    if (percentage >= 70) return 'bg-orange-100 text-orange-800 border-orange-300'
+    return 'bg-green-100 text-green-800 border-green-300'
   }
 
   function openContentDialog(date: Date) {
@@ -229,6 +254,61 @@ export default function CalendarPage() {
                     </div>
                   )}
                 </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Daily Slot Occupancy Calendar */}
+      <div className="pt-2">
+        <div className="flex flex-col gap-3 mb-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="font-semibold text-sm">Daily Slot Occupancy</h3>
+              <p className="text-xs text-gray-500">{format(currentMonth, 'MMMM yyyy')} · Select a screen to check availability</p>
+            </div>
+            <div className="flex gap-3 text-[10px] sm:text-xs">
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-200 border border-green-300" />0–69%</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-200 border border-orange-300" />70–89%</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-200 border border-red-300" />90–100%</span>
+            </div>
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {billboards.map(bb => (
+              <Button
+                key={bb.id}
+                size="sm"
+                variant={occupancyBillboard === bb.id ? 'default' : 'outline'}
+                onClick={() => setOccupancyBillboard(bb.id)}
+                className={`whitespace-nowrap text-xs ${occupancyBillboard === bb.id ? 'bg-red-600 hover:bg-red-700' : ''}`}
+              >
+                {bb.name}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-7 gap-px text-center text-xs font-medium text-gray-500 mb-1">
+          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => <div key={`occupancy-${d}`}>{d}</div>)}
+        </div>
+        <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-lg overflow-hidden">
+          {Array.from({ length: padDays }).map((_, i) => <div key={`occupancy-pad-${i}`} className="bg-gray-50 min-h-[62px]" />)}
+          {days.map(day => {
+            const occupied = getOccupancyForDay(day)
+            const displayOccupied = Number.isInteger(occupied) ? occupied : occupied.toFixed(1)
+            return (
+              <div
+                key={`occupancy-${day.toISOString()}`}
+                className={`min-h-[62px] p-1.5 border ${getOccupancyColour(occupied)} ${isToday(day) ? 'ring-2 ring-gray-900 ring-inset' : ''}`}
+                title={`${format(day, 'dd MMM yyyy')}: ${displayOccupied} of ${occupancyMaxSlots} slots occupied on ${selectedOccupancyScreen?.name || 'this screen'}`}
+              >
+                <div className="text-[10px] sm:text-xs font-medium opacity-75">{format(day, 'd')}</div>
+                <div className="mt-1 text-center font-bold text-xs sm:text-sm leading-tight">
+                  {displayOccupied}/{occupancyMaxSlots}
+                </div>
+                <div className="hidden sm:block text-center text-[9px] opacity-75">occupied</div>
               </div>
             )
           })}
