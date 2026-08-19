@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { APP_PAGES, canAccessPage, firstAllowedPage } from '@/lib/page-access'
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: request.headers } })
@@ -44,7 +45,7 @@ export async function updateSession(request: NextRequest) {
 
   // Check profile and approval status for authenticated users
   if (user && !request.nextUrl.pathname.startsWith('/api') && !request.nextUrl.pathname.startsWith('/auth')) {
-    const { data: profile } = await supabase.from('profiles').select('approved, role').eq('id', user.id).single()
+    const { data: profile } = await supabase.from('profiles').select('approved, role, allowed_pages').eq('id', user.id).single()
     
     // No profile found (user was removed) → sign out and redirect to login
     if (!profile) {
@@ -73,7 +74,16 @@ export async function updateSession(request: NextRequest) {
       // Approved user on pending page → redirect to dashboard
       if (request.nextUrl.pathname.startsWith('/pending-approval')) {
         const url = request.nextUrl.clone()
-        url.pathname = '/dashboard'
+        url.pathname = firstAllowedPage(profile.role, profile.allowed_pages)
+        return NextResponse.redirect(url)
+      }
+
+      const requestedPage = APP_PAGES.find(page =>
+        request.nextUrl.pathname === page.href || request.nextUrl.pathname.startsWith(`${page.href}/`)
+      )
+      if (requestedPage && !canAccessPage(profile.role, profile.allowed_pages, requestedPage.href)) {
+        const url = request.nextUrl.clone()
+        url.pathname = firstAllowedPage(profile.role, profile.allowed_pages)
         return NextResponse.redirect(url)
       }
     }
@@ -82,7 +92,8 @@ export async function updateSession(request: NextRequest) {
   // Redirect root to dashboard
   if (user && request.nextUrl.pathname === '/') {
     const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
+    const { data: profile } = await supabase.from('profiles').select('role, allowed_pages').eq('id', user.id).single()
+    url.pathname = firstAllowedPage(profile?.role, profile?.allowed_pages)
     return NextResponse.redirect(url)
   }
 

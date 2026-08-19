@@ -6,6 +6,8 @@ import { usePathname } from 'next/navigation'
 import { LayoutDashboard, Calendar, Users, Building2, FileText, BarChart3, HandCoins, Percent, Shield, StickyNote, LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+import { useProfile } from '@/lib/hooks/use-profile'
+import { canAccessPage } from '@/lib/page-access'
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -28,6 +30,8 @@ interface SidebarProps {
 export function Sidebar({ className, onNavigate }: SidebarProps) {
   const pathname = usePathname()
   const supabase = createClient()
+  const { profile, loading } = useProfile()
+  const visibleNavItems = loading ? [] : navItems.filter(item => canAccessPage(profile?.role, profile?.allowed_pages, item.href))
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -42,7 +46,7 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
         </div>
       </div>
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-        {navItems.map(item => {
+        {visibleNavItems.map(item => {
           const active = pathname.startsWith(item.href)
           return (
             <Link

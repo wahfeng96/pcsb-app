@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Users, Edit2, Eye, Trash2, Plus, X, Check, UserCheck, UserX, ShieldCheck, ShieldX } from 'lucide-react'
 import type { Profile, Billboard, UserRole } from '@/types/database'
 import { useRole } from '@/lib/hooks/use-role'
+import { APP_PAGES } from '@/lib/page-access'
 
 type UserAccess = {
   user_id: string
@@ -26,6 +27,7 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true)
   const [editingUser, setEditingUser] = useState<string | null>(null)
   const [selectedBillboards, setSelectedBillboards] = useState<Record<string, 'view' | 'edit'>>({})
+  const [selectedPages, setSelectedPages] = useState<string[]>([])
 
   async function load() {
     const [pr, bb, ac] = await Promise.all([
@@ -46,16 +48,24 @@ export default function UsersPage() {
   }
 
   function startEditAccess(userId: string) {
+    const user = profiles.find(profile => profile.id === userId)
     const current = getUserAccess(userId)
     const selected: Record<string, 'view' | 'edit'> = {}
     current.forEach(a => {
       selected[a.billboard_id] = a.can_edit ? 'edit' : 'view'
     })
     setSelectedBillboards(selected)
+    setSelectedPages(user?.allowed_pages ?? APP_PAGES.map(page => page.href))
     setEditingUser(userId)
   }
 
   async function saveAccess(userId: string) {
+    const { error: pageError } = await supabase.from('profiles').update({ allowed_pages: selectedPages }).eq('id', userId)
+    if (pageError) {
+      alert('Failed to save page access: ' + pageError.message)
+      return
+    }
+
     // Delete existing access
     await supabase.from('user_billboard_access').delete().eq('user_id', userId)
 
@@ -106,6 +116,13 @@ export default function UsersPage() {
       const { [bbId]: _, ...rest } = prev
       return rest
     })
+  }
+
+  function togglePage(href: string) {
+    setSelectedPages(current => current.includes(href)
+      ? current.filter(page => page !== href)
+      : [...current, href]
+    )
   }
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600" /></div>
@@ -159,7 +176,7 @@ export default function UsersPage() {
                       <option value="team">Team</option>
                       <option value="partner">Partner</option>
                     </select>
-                    {!isEditing ? (
+                    {user.role !== 'owner' && (!isEditing ? (
                       <Button size="sm" variant="outline" onClick={() => startEditAccess(user.id)}>
                         <Edit2 className="h-3 w-3 mr-1" /> Access
                       </Button>
@@ -172,7 +189,7 @@ export default function UsersPage() {
                           <X className="h-3 w-3" />
                         </Button>
                       </div>
-                    )}
+                    ))}
                   </div>
                   )}
                 </div>
@@ -199,26 +216,63 @@ export default function UsersPage() {
                 {!isEditing && (
                   <div className="flex flex-wrap gap-1">
                     {user.role === 'owner' ? (
-                      <Badge className="text-[10px] bg-red-100 text-red-700">All Billboards (Owner)</Badge>
+                      <div className="flex flex-wrap gap-1">
+                        <Badge className="text-[10px] bg-red-100 text-red-700">All Pages (Owner)</Badge>
+                        <Badge className="text-[10px] bg-red-100 text-red-700">All Billboards (Owner)</Badge>
+                      </div>
                     ) : access.length === 0 ? (
-                      <span className="text-xs text-gray-400">No billboard access</span>
+                      <div className="space-y-1">
+                        <p className="text-xs text-gray-500">Pages: {user.allowed_pages == null ? 'All pages' : `${user.allowed_pages.length} selected`}</p>
+                        <span className="text-xs text-gray-400">No billboard access</span>
+                      </div>
                     ) : (
-                      access.map(a => {
-                        const bb = billboards.find(b => b.id === a.billboard_id)
-                        return (
-                          <Badge key={a.billboard_id} variant="outline" className={`text-[10px] ${a.can_edit ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700'}`}>
-                            {a.can_edit ? '✏️' : '👁'} {bb?.name || 'Unknown'}
-                          </Badge>
-                        )
-                      })
+                      <div className="space-y-1">
+                        <p className="text-xs text-gray-500">Pages: {user.allowed_pages == null ? 'All pages' : `${user.allowed_pages.length} selected`}</p>
+                        <div className="flex flex-wrap gap-1">
+                          {access.map(a => {
+                            const bb = billboards.find(b => b.id === a.billboard_id)
+                            return (
+                              <Badge key={a.billboard_id} variant="outline" className={`text-[10px] ${a.can_edit ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700'}`}>
+                                {a.can_edit ? '✏️' : '👁'} {bb?.name || 'Unknown'}
+                              </Badge>
+                            )
+                          })}
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}
 
                 {/* Edit access */}
                 {isEditing && (
-                  <div className="space-y-1 mt-2">
-                    <p className="text-xs text-gray-500 font-medium">Tap to cycle access:</p>
+                  <div className="space-y-3 mt-3">
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <p className="text-xs text-gray-500 font-medium">Pages this user can see:</p>
+                        <div className="flex gap-1">
+                          <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px]" onClick={() => setSelectedPages(APP_PAGES.map(page => page.href))}>All</Button>
+                          <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px]" onClick={() => setSelectedPages([])}>None</Button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                        {APP_PAGES.map(page => {
+                          const selected = selectedPages.includes(page.href)
+                          return (
+                            <Button
+                              key={page.href}
+                              size="sm"
+                              variant="outline"
+                              className={`justify-start text-xs ${selected ? 'bg-red-50 border-red-400 text-red-700' : 'bg-gray-50 text-gray-400'}`}
+                              onClick={() => togglePage(page.href)}
+                            >
+                              {selected ? <Check className="h-3 w-3 mr-1" /> : <X className="h-3 w-3 mr-1" />}{page.label}
+                            </Button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                    <div>
+                    <p className="text-xs text-gray-500 font-medium mb-1.5">Tap billboard to cycle access:</p>
                     <div className="flex flex-wrap gap-1.5">
                       {billboards.map(bb => {
                         const level = selectedBillboards[bb.id]
@@ -238,6 +292,7 @@ export default function UsersPage() {
                           </Button>
                         )
                       })}
+                    </div>
                     </div>
                   </div>
                 )}

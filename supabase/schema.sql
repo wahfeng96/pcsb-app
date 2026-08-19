@@ -12,6 +12,7 @@ create table if not exists public.profiles (
   email text not null,
   name text not null default '',
   role text not null default 'team' check (role in ('owner', 'team', 'partner')),
+  allowed_pages text[] default null,
   created_at timestamptz not null default now()
 );
 

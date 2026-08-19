@@ -23,6 +23,7 @@ export interface Profile {
   name: string
   role: UserRole
   approved: boolean
+  allowed_pages: string[] | null
   created_at: string
 }
 

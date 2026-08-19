@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { LayoutDashboard, Calendar, Users, Building2, MoreHorizontal, FileText, BarChart3, HandCoins, Percent, Shield, StickyNote, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useProfile } from '@/lib/hooks/use-profile'
+import { canAccessPage } from '@/lib/page-access'
 
 const mainNav = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -25,7 +27,10 @@ const moreNav = [
 export function BottomNav() {
   const pathname = usePathname()
   const [showMore, setShowMore] = useState(false)
-  const isMoreActive = moreNav.some(item => pathname.startsWith(item.href))
+  const { profile, loading } = useProfile()
+  const visibleMainNav = loading ? [] : mainNav.filter(item => canAccessPage(profile?.role, profile?.allowed_pages, item.href))
+  const visibleMoreNav = loading ? [] : moreNav.filter(item => canAccessPage(profile?.role, profile?.allowed_pages, item.href))
+  const isMoreActive = visibleMoreNav.some(item => pathname.startsWith(item.href))
 
   return (
     <>
@@ -38,7 +43,7 @@ export function BottomNav() {
               <button onClick={() => setShowMore(false)}><X className="h-4 w-4 text-gray-400" /></button>
             </div>
             <div className="grid grid-cols-3 gap-2">
-              {moreNav.map(item => {
+              {visibleMoreNav.map(item => {
                 const active = pathname.startsWith(item.href)
                 return (
                   <Link
@@ -63,7 +68,7 @@ export function BottomNav() {
       {/* Bottom nav bar */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 md:hidden">
         <div className="flex justify-around items-center h-16">
-          {mainNav.map(item => {
+          {visibleMainNav.map(item => {
             const active = pathname.startsWith(item.href)
             return (
               <Link
@@ -79,7 +84,7 @@ export function BottomNav() {
               </Link>
             )
           })}
-          <button
+          {visibleMoreNav.length > 0 && <button
             onClick={() => setShowMore(!showMore)}
             className={cn(
               'flex flex-col items-center justify-center gap-1 flex-1 h-full text-xs',
@@ -88,7 +93,7 @@ export function BottomNav() {
           >
             <MoreHorizontal className="h-5 w-5" />
             <span>More</span>
-          </button>
+          </button>}
         </div>
       </nav>
     </>
