@@ -13,6 +13,8 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths
 import type { Booking, Client, Billboard, ContentChange } from '@/types/database'
 import { computeBookingStatus } from '@/lib/booking-utils'
 import { getBillboardMaxSlots } from '@/lib/billboard-slots'
+import { getOccupantsForDate, getOccupiedSlots } from '@/lib/calendar-occupancy'
+import { OccupancyPopover } from '@/components/calendar/occupancy-popover'
 
 type BookingWithRefs = Booking & { client: Client; billboard: Billboard }
 type ContentChangeWithRefs = ContentChange & { billboard: Billboard }
@@ -84,16 +86,8 @@ export default function CalendarPage() {
   const selectedOccupancyScreen = billboards.find(bb => bb.id === occupancyBillboard)
   const occupancyMaxSlots = getBillboardMaxSlots(selectedOccupancyScreen)
 
-  function getOccupancyForDay(date: Date) {
-    const dateString = format(date, 'yyyy-MM-dd')
-    return bookings
-      .filter(b =>
-        b.billboard_id === occupancyBillboard &&
-        computeBookingStatus(b.start_date, b.end_date, b.status) !== 'cancelled' &&
-        b.start_date <= dateString &&
-        b.end_date >= dateString
-      )
-      .reduce((sum, b) => sum + (b.spot_size || 1), 0)
+  function getOccupantsForDay(date: Date) {
+    return getOccupantsForDate(bookings, occupancyBillboard, format(date, 'yyyy-MM-dd'))
   }
 
   function getOccupancyColour(occupied: number) {
@@ -296,19 +290,32 @@ export default function CalendarPage() {
         <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-lg overflow-hidden">
           {Array.from({ length: padDays }).map((_, i) => <div key={`occupancy-pad-${i}`} className="bg-gray-50 min-h-[62px]" />)}
           {days.map(day => {
-            const occupied = getOccupancyForDay(day)
+            const occupants = getOccupantsForDay(day)
+            const occupied = getOccupiedSlots(occupants)
             const displayOccupied = Number.isInteger(occupied) ? occupied : occupied.toFixed(1)
+            const dateLabel = format(day, 'dd MMM yyyy')
+            const screenName = selectedOccupancyScreen?.name || 'this screen'
             return (
               <div
                 key={`occupancy-${day.toISOString()}`}
-                className={`min-h-[62px] p-1.5 border ${getOccupancyColour(occupied)} ${isToday(day) ? 'ring-2 ring-gray-900 ring-inset' : ''}`}
-                title={`${format(day, 'dd MMM yyyy')}: ${displayOccupied} of ${occupancyMaxSlots} slots occupied on ${selectedOccupancyScreen?.name || 'this screen'}`}
+                className={`relative min-h-[62px] p-1.5 border ${getOccupancyColour(occupied)} ${isToday(day) ? 'ring-2 ring-gray-900 ring-inset' : ''}`}
+                aria-label={`${dateLabel}: ${displayOccupied} of ${occupancyMaxSlots} slots occupied on ${screenName}`}
               >
                 <div className="text-[10px] sm:text-xs font-medium opacity-75">{format(day, 'd')}</div>
-                <div className="mt-1 text-center font-bold text-xs sm:text-sm leading-tight">
-                  {displayOccupied}/{occupancyMaxSlots}
-                </div>
-                <div className="hidden sm:block text-center text-[9px] opacity-75">occupied</div>
+                {occupants.length > 0 ? (
+                  <OccupancyPopover
+                    dateLabel={dateLabel}
+                    screenName={screenName}
+                    occupied={occupied}
+                    maxSlots={occupancyMaxSlots}
+                    occupants={occupants}
+                  />
+                ) : (
+                  <div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-[9px] font-semibold leading-tight" aria-hidden="true">
+                    0/{occupancyMaxSlots}
+                  </div>
+                )}
+                <div className="hidden sm:block pt-4 text-center text-[9px] opacity-75">occupied</div>
               </div>
             )
           })}
