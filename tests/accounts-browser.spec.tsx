@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/experimental-ct-react'
 import AccountsPage from '../src/app/(app)/accounts/page'
 
 for (const mobile of [false, true]) {
-  test(`Accounts normal and preserved review ${mobile ? 'mobile owner' : 'desktop viewer'}`, async ({ mount, page }) => {
+  test(`Accounts normal billing without review UI ${mobile ? 'mobile owner' : 'desktop viewer'}`, async ({ mount, page }) => {
     await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 })
     await page.evaluate(({ owner }) => {
       const now = new Date()
@@ -22,17 +22,17 @@ for (const mobile of [false, true]) {
     const networkWrites: string[] = []
     page.on('request', r => { if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(r.method())) networkWrites.push(r.url()) })
     await mount(<AccountsPage />)
-    const review = page.getByRole('region', { name: 'Extra-month records', exact: true })
-    await expect(review.getByTestId('extra-month-record')).toHaveCount(3)
-    await expect(review).toContainText('@EXTRA,1234')
-    await expect(review).toContainText('@PAID')
-    await expect(review).toContainText('None saved')
-    await expect(review).toContainText('2025-11')
-    await expect(review).toContainText('Saved payment status: Invoice Sent')
-    await expect(review).toContainText('Saved payment status: Completed')
-    await expect(review.getByRole('button')).toHaveCount(0)
-    expect(await review.getByText('Needs review — outside billing period', { exact: true }).first().evaluate(el => getComputedStyle(el).color)).toBe('rgb(153, 27, 27)')
-    await expect(page.getByRole('region', { name: 'Billing inference uncertainties' })).toContainText('no billing months inferred')
+    const fixtureBefore = await page.evaluate(() => JSON.stringify((window as unknown as { salesFixture: unknown }).salesFixture))
+    async function expectNoReview() {
+      await expect(page.getByRole('region', { name: 'Extra-month records', exact: true })).toHaveCount(0)
+      await expect(page.getByTestId('extra-month-record')).toHaveCount(0)
+      await expect(page.getByRole('region', { name: 'Billing inference uncertainties' })).toHaveCount(0)
+      await expect(page.getByText(/Needs review|Billing inference needs confirmation|no billing months inferred/)).toHaveCount(0)
+      await expect(page.getByText(/@EXTRA|@PAID/)).toHaveCount(0)
+    }
+    await expect(page.getByRole('heading', { name: 'Accounts', exact: true })).toBeVisible()
+    await expectNoReview()
+    await expect(page.getByText('Monthly Revenue', { exact: true }).locator('..')).toContainText('RM 2,000')
     await page.getByRole('button', { name: 'Billable months for Synthetic Maxis', exact: true }).click()
     await expect(page.getByText('Billable months · Campaign:', { exact: false })).toBeVisible()
     await expect(page.getByText('1 billable', { exact: true })).toBeVisible()
@@ -47,20 +47,22 @@ for (const mobile of [false, true]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
     await page.getByRole('button', { name: 'Next month', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Billable months for Synthetic Maxis' })).toHaveCount(0)
-    await expect(review.getByTestId('extra-month-record')).toHaveCount(3)
+    await expectNoReview()
     const downloadPromise = page.waitForEvent('download')
     await page.getByRole('button', { name: 'Export', exact: true }).click()
     const download = await downloadPromise
     const stream = await download.createReadStream()
     let csv = ''; for await (const chunk of stream!) csv += chunk.toString()
-    expect(csv).toContain('Extra-month records — ALL months')
-    expect(csv).toContain('@EXTRA,1234')
-    expect(csv).toContain('2025-11')
-    expect(csv).toContain('Needs review — outside billing period')
+    expect(csv).toContain('Monthly Payment Status')
+    expect(csv).toContain('TOTAL,0.00,0.00,0.00,0.00,2000.00,2000.00,0.00')
+    for (const removed of ['Extra-month records', '@EXTRA', '@PAID', '2025-11', 'Needs review', 'Billing inference uncertainties', 'Synthetic FOC']) {
+      expect(csv).not.toContain(removed)
+    }
     await page.getByRole('button', { name: 'Screen B', exact: true }).click()
-    await expect(review.getByTestId('extra-month-record')).toHaveCount(0)
+    await expectNoReview()
     await page.getByRole('button', { name: 'All', exact: true }).click()
-    await expect(review.getByTestId('extra-month-record')).toHaveCount(3)
+    await expectNoReview()
+    expect(await page.evaluate(() => JSON.stringify((window as unknown as { salesFixture: unknown }).salesFixture))).toBe(fixtureBefore)
     expect(networkWrites).toEqual([])
   })
 }

@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Download, FileText, Lock, Plus, Pencil, Trash2, X, Check, DollarSign } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { format, startOfMonth, addMonths, subMonths, parseISO, isSameMonth } from 'date-fns'
-import { accountMonths, billingUncertainty, isBillableMonth, effectivePaymentStatus, billableTotals, extraPayments, csvCell } from '@/lib/accounts-billing'
+import { accountMonths, isBillableMonth, effectivePaymentStatus, billableTotals, csvCell } from '@/lib/accounts-billing'
 import type { Billboard, Booking, Client } from '@/types/database'
 import { useRole } from '@/lib/hooks/use-role'
 
@@ -299,9 +299,6 @@ export default function AccountsPage() {
     return monthlyPayments.find(p => p.booking_id === bookingId && p.month === monthKey)?.invoice_number
   }
 
-  const reviewRows = extraPayments(bookings, monthlyPayments).filter(({ booking }) => selectedBb === 'all' || booking.billboard_id === selectedBb)
-  const uncertainBookings = bookings.filter(b => (selectedBb === 'all' || b.billboard_id === selectedBb) && billingUncertainty(b))
-
   function handleDownloadReport() {
     const month = format(viewMonth, 'MMMM yyyy')
     const monthKey = format(viewMonth, 'yyyy-MM')
@@ -322,14 +319,6 @@ export default function AccountsPage() {
         csv += [s.billboard.name, b.client?.company_name, b.brand_name, b.monthly_rate, PAYMENT_STATUS_DISPLAY[status].label, getInvoiceNumber(b.id, monthKey)].map(csvCell).join(',') + '\n'
       })
     })
-
-    csv += '\n\nExtra-month records — ALL months; selected billboard; excluded from normal totals; not new bills\n'
-    csv += 'Brand,Client,Location,Campaign start,Campaign end,Saved month,Saved amount (RM),Original invoice number,Saved payment status,Review label\n'
-    reviewRows.forEach(({ booking: b, payment: p }) => {
-      csv += [b.brand_name, b.client?.company_name, b.billboard?.name, b.start_date, b.end_date, p.month, p.amount, p.invoice_number, p.status, 'Needs review — outside billing period'].map(csvCell).join(',') + '\n'
-    })
-    csv += '\nBilling inference uncertainties — ALL months; selected billboard\n'
-    uncertainBookings.forEach(b => { csv += [b.brand_name, b.start_date, b.end_date, billingUncertainty(b)].map(csvCell).join(',') + '\n' })
 
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
@@ -424,25 +413,6 @@ export default function AccountsPage() {
         ))}
       </div>
 
-      <section aria-label="Extra-month records" className="rounded-lg border border-red-300 bg-red-50 p-4 space-y-3">
-        <h3 className="font-semibold text-red-800">Needs review — Extra-month records ({reviewRows.length})</h3>
-        <p className="text-xs text-red-900">All saved months, including before campaign start and records without invoices. Billboard filter applies; month navigation does not hide review records. Read-only: original amounts, invoice references and saved statuses are unchanged. Excluded from normal billable totals — these are not new bills.</p>
-        {reviewRows.length === 0 && <p className="text-sm">No saved extra-month records for this billboard selection.</p>}
-        {reviewRows.map(({ booking: b, payment: p }) => (
-          <article key={p.id} className="rounded border border-red-200 bg-white p-3 text-xs space-y-1 break-words" data-testid="extra-month-record">
-            <p className="font-bold text-red-800">Needs review — outside billing period</p>
-            <p className="font-semibold">{b.brand_name || b.client?.company_name} · {b.client?.company_name} · {b.billboard?.name}</p>
-            <p>Campaign: {b.start_date} → {b.end_date} · Saved month: {p.month}</p>
-            <p>Saved amount: RM {p.amount.toLocaleString('en-MY', { minimumFractionDigits: 2 })} · Original invoice number: <strong className={p.invoice_number?.trim() ? 'text-red-800' : ''}>{p.invoice_number || 'None saved'}</strong></p>
-            <p>Saved payment status: {PAYMENT_STATUS_DISPLAY[p.status]?.label || p.status}{isProfitShareTriggered(b.id, p.month) ? ' · Profit Sharing already triggered (saved status retained above)' : ''}</p>
-            {billingUncertainty(b) && <p>{billingUncertainty(b)}</p>}
-          </article>
-        ))}
-      </section>
-      {uncertainBookings.length > 0 && <section aria-label="Billing inference uncertainties" className="rounded border border-amber-300 bg-amber-50 p-3 text-xs space-y-2">
-        <h3 className="font-semibold">Billing inference needs confirmation ({uncertainBookings.length}) · All months, selected billboard</h3>
-        {uncertainBookings.map(b => <p key={b.id}>{b.brand_name || b.client?.company_name} · {b.billboard?.name} · {b.start_date} → {b.end_date}: {billingUncertainty(b)}</p>)}
-      </section>}
       <p className="text-xs text-gray-600">Normal rows use the full monthly rate for N consecutive months from the start month, matching Sales Summary total/rate inference, not campaign end dates. Completed includes existing Profit Sharing overrides; it is not independent proof of bank receipt.</p>
       {/* Grand Summary */}
       <Card>
