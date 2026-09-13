@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Download, FileText, Lock, Plus, Pencil, Trash2, X, Check, DollarSign } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { format, startOfMonth, addMonths, subMonths, parseISO, isSameMonth } from 'date-fns'
-import { getRevenueMonths } from '@/lib/booking-utils'
+import { accountMonths, billingUncertainty, isBillableMonth, effectivePaymentStatus, billableTotals, extraPayments, csvCell } from '@/lib/accounts-billing'
 import type { Billboard, Booking, Client } from '@/types/database'
 import { useRole } from '@/lib/hooks/use-role'
 
@@ -82,7 +82,7 @@ export default function AccountsPage() {
 
   function getMonthlyRevenueForBooking(b: BookingWithRefs, month: Date): number {
     if (b.status === 'cancelled') return 0
-    const months = getRevenueMonths(parseISO(b.start_date), b.monthly_rate, b.total_amount)
+    const months = accountMonths(b)
     if (!months.some(m => isSameMonth(m, month))) return 0
     return b.monthly_rate || 0
   }
@@ -106,12 +106,12 @@ export default function AccountsPage() {
 
   // Get payment status — auto "completed" if profit sharing is waiting/settled
   function getPaymentStatus(bookingId: string, monthKey: string): MonthlyPayment['status'] {
-    if (isProfitShareTriggered(bookingId, monthKey)) return 'completed'
-    const existing = monthlyPayments.find(p => p.booking_id === bookingId && p.month === monthKey)
-    return existing?.status || 'pending_invoice'
+    return effectivePaymentStatus(bookingId, monthKey, monthlyPayments, profitRecords)
   }
 
   async function cyclePaymentStatus(bookingId: string, monthKey: string, amount: number, invoiceNum?: string) {
+    const booking = bookings.find(b => b.id === bookingId)
+    if (!canEdit || !booking || !isBillableMonth(booking, monthKey)) return
     // If profit sharing already triggered, status is locked to completed
     if (isProfitShareTriggered(bookingId, monthKey)) return
 
@@ -251,21 +251,20 @@ export default function AccountsPage() {
       const monthProfit = monthRevenue - monthCost
       const partnerShare = monthProfit * ((bb.profit_share_percent || 0) / 100)
 
-      const totalRevenue = bbBookings.reduce((sum, b) => sum + (b.total_amount || 0), 0)
-      const settledRevenue = bbBookings.filter(b => b.payment_status === 'settled').reduce((sum, b) => sum + (b.total_amount || 0), 0)
-      const pendingRevenue = totalRevenue - settledRevenue
+      const totals = billableTotals(bbBookings, monthlyPayments, profitRecords)
+      const totalRevenue = totals.total
+      const settledRevenue = totals.completed
+      const pendingRevenue = totals.outstanding
 
       // Active bookings this month
       const activeThisMonth = bbBookings.filter(b => {
-        const start = parseISO(b.start_date)
-        const end = parseISO(b.end_date)
-        const months = getMonthsBetween(start, end)
+        const months = accountMonths(b)
         return months.some(m => isSameMonth(m, viewMonth))
       })
 
       return { billboard: bb, monthRevenue, monthCost, monthProfit, partnerShare, totalRevenue, settledRevenue, pendingRevenue, activeThisMonth }
     })
-  }, [billboards, bookings, costs, viewMonth])
+  }, [billboards, bookings, costs, viewMonth, monthlyPayments, profitRecords])
 
   const grandTotals = useMemo(() => {
     const items = selectedBb === 'all' ? billboardSummaries : billboardSummaries.filter(s => s.billboard.id === selectedBb)
@@ -287,18 +286,21 @@ export default function AccountsPage() {
     const monthKey = format(viewMonth, 'yyyy-MM')
     let pending = 0, sent = 0, completed = 0
     allActive.forEach(b => {
-      const status = getPaymentStatus(b.id, monthKey)
+      const status = effectivePaymentStatus(b.id, monthKey, monthlyPayments, profitRecords)
       const amt = b.monthly_rate || 0
       if (status === 'pending_invoice') pending += amt
       else if (status === 'invoice_sent') sent += amt
       else completed += amt
     })
     return { pending, sent, completed }
-  }, [billboardSummaries, selectedBb, monthlyPayments, viewMonth])
+  }, [billboardSummaries, selectedBb, monthlyPayments, profitRecords, viewMonth])
 
   function getInvoiceNumber(bookingId: string, monthKey: string): string | undefined {
     return monthlyPayments.find(p => p.booking_id === bookingId && p.month === monthKey)?.invoice_number
   }
+
+  const reviewRows = extraPayments(bookings, monthlyPayments).filter(({ booking }) => selectedBb === 'all' || booking.billboard_id === selectedBb)
+  const uncertainBookings = bookings.filter(b => (selectedBb === 'all' || b.billboard_id === selectedBb) && billingUncertainty(b))
 
   function handleDownloadReport() {
     const month = format(viewMonth, 'MMMM yyyy')
@@ -306,20 +308,28 @@ export default function AccountsPage() {
     const items = selectedBb === 'all' ? billboardSummaries : billboardSummaries.filter(s => s.billboard.id === selectedBb)
     
     let csv = `PCSB Monthly Report - ${month}\n\n`
-    csv += `Billboard,Monthly Revenue (RM),Monthly Cost (RM),Profit (RM),Partner Share (RM),Total Revenue (RM),Settled (RM),Pending (RM)\n`
+    csv += `Billboard,Monthly Revenue (RM),Monthly Cost (RM),Profit (RM),Partner Share (RM),All-time Billable Revenue (RM),All-time Billable Completed (RM),All-time Billable Outstanding (RM)\n`
     items.forEach(s => {
-      csv += `${s.billboard.name},${Math.round(s.monthRevenue)},${Math.round(s.monthCost)},${Math.round(s.monthProfit)},${Math.round(s.partnerShare)},${Math.round(s.totalRevenue)},${Math.round(s.settledRevenue)},${Math.round(s.pendingRevenue)}\n`
+      csv += `${csvCell(s.billboard.name)},${s.monthRevenue.toFixed(2)},${s.monthCost.toFixed(2)},${s.monthProfit.toFixed(2)},${s.partnerShare.toFixed(2)},${s.totalRevenue.toFixed(2)},${s.settledRevenue.toFixed(2)},${s.pendingRevenue.toFixed(2)}\n`
     })
-    csv += `\nTOTAL,${Math.round(grandTotals.monthRevenue)},${Math.round(grandTotals.monthCost)},${Math.round(grandTotals.monthProfit)},${Math.round(grandTotals.partnerShare)},${Math.round(grandTotals.totalRevenue)},${Math.round(grandTotals.settledRevenue)},${Math.round(grandTotals.pendingRevenue)}\n`
+    csv += `\nTOTAL,${grandTotals.monthRevenue.toFixed(2)},${grandTotals.monthCost.toFixed(2)},${grandTotals.monthProfit.toFixed(2)},${grandTotals.partnerShare.toFixed(2)},${grandTotals.totalRevenue.toFixed(2)},${grandTotals.settledRevenue.toFixed(2)},${grandTotals.pendingRevenue.toFixed(2)}\n`
     
     csv += `\n\nMonthly Payment Status - ${month}\n`
-    csv += `Billboard,Client,Brand,Monthly Rate (RM),Payment Status\n`
+    csv += `Billboard,Client,Brand,Monthly Rate (RM),Payment Status,Original invoice number\n`
     items.forEach(s => {
       s.activeThisMonth.forEach(b => {
         const status = getPaymentStatus(b.id, monthKey)
-        csv += `${s.billboard.name},${b.client?.company_name || ''},${b.brand_name || ''},${b.monthly_rate},${PAYMENT_STATUS_DISPLAY[status].label}\n`
+        csv += [s.billboard.name, b.client?.company_name, b.brand_name, b.monthly_rate, PAYMENT_STATUS_DISPLAY[status].label, getInvoiceNumber(b.id, monthKey)].map(csvCell).join(',') + '\n'
       })
     })
+
+    csv += '\n\nExtra-month records — ALL months; selected billboard; excluded from normal totals; not new bills\n'
+    csv += 'Brand,Client,Location,Campaign start,Campaign end,Saved month,Saved amount (RM),Original invoice number,Saved payment status,Review label\n'
+    reviewRows.forEach(({ booking: b, payment: p }) => {
+      csv += [b.brand_name, b.client?.company_name, b.billboard?.name, b.start_date, b.end_date, p.month, p.amount, p.invoice_number, p.status, 'Needs review — outside billing period'].map(csvCell).join(',') + '\n'
+    })
+    csv += '\nBilling inference uncertainties — ALL months; selected billboard\n'
+    uncertainBookings.forEach(b => { csv += [b.brand_name, b.start_date, b.end_date, billingUncertainty(b)].map(csvCell).join(',') + '\n' })
 
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
@@ -346,12 +356,12 @@ export default function AccountsPage() {
 
       {/* Needs Invoice Number — per month row, one entry per monthly payment */}
       {(() => {
-        const missing = monthlyPayments.filter(p => p.status === 'invoice_sent' && !p.invoice_number)
+        const missing = monthlyPayments.filter(p => p.status === 'invoice_sent' && !p.invoice_number && bookings.some(b => b.id === p.booking_id && b.status !== 'cancelled' && isBillableMonth(b, p.month) && (selectedBb === 'all' || b.billboard_id === selectedBb)))
         if (missing.length === 0) return null
         return (
           <Card className="border-blue-300 bg-blue-50">
             <CardContent className="p-3 space-y-2">
-              <p className="text-xs font-semibold text-blue-700">📨 Invoice Sent — Missing Invoice Number ({missing.length})</p>
+              <p className="text-xs font-semibold text-blue-700">📨 Invoice Sent — Missing Invoice Number ({missing.length}) · All billable months, selected billboard</p>
               {missing.map(p => {
                 const booking = bookings.find(b => b.id === p.booking_id)
                 const clientName = booking?.brand_name || booking?.client?.company_name || 'Unknown'
@@ -362,7 +372,7 @@ export default function AccountsPage() {
                       <p className="text-xs font-medium">{clientName}</p>
                       <p className="text-[10px] text-gray-500">{p.month} · RM {p.amount.toLocaleString()}</p>
                     </div>
-                    {invoiceInputKey === key ? (
+                    {!canEdit ? <span className="text-xs">Missing invoice number</span> : invoiceInputKey === key ? (
                       <div className="flex items-center gap-1">
                         <input
                           type="text"
@@ -401,9 +411,9 @@ export default function AccountsPage() {
 
       {/* Month navigation */}
       <div className="flex items-center justify-between bg-white rounded-lg border p-2">
-        <Button size="icon" variant="ghost" onClick={() => setViewMonth(subMonths(viewMonth, 1))}><ChevronLeft className="h-4 w-4" /></Button>
+        <Button aria-label="Previous month" size="icon" variant="ghost" onClick={() => setViewMonth(subMonths(viewMonth, 1))}><ChevronLeft className="h-4 w-4" /></Button>
         <h2 className="font-semibold">{format(viewMonth, 'MMMM yyyy')}</h2>
-        <Button size="icon" variant="ghost" onClick={() => setViewMonth(addMonths(viewMonth, 1))}><ChevronRight className="h-4 w-4" /></Button>
+        <Button aria-label="Next month" size="icon" variant="ghost" onClick={() => setViewMonth(addMonths(viewMonth, 1))}><ChevronRight className="h-4 w-4" /></Button>
       </div>
 
       {/* Billboard filter */}
@@ -414,6 +424,26 @@ export default function AccountsPage() {
         ))}
       </div>
 
+      <section aria-label="Extra-month records" className="rounded-lg border border-red-300 bg-red-50 p-4 space-y-3">
+        <h3 className="font-semibold text-red-800">Needs review — Extra-month records ({reviewRows.length})</h3>
+        <p className="text-xs text-red-900">All saved months, including before campaign start and records without invoices. Billboard filter applies; month navigation does not hide review records. Read-only: original amounts, invoice references and saved statuses are unchanged. Excluded from normal billable totals — these are not new bills.</p>
+        {reviewRows.length === 0 && <p className="text-sm">No saved extra-month records for this billboard selection.</p>}
+        {reviewRows.map(({ booking: b, payment: p }) => (
+          <article key={p.id} className="rounded border border-red-200 bg-white p-3 text-xs space-y-1 break-words" data-testid="extra-month-record">
+            <p className="font-bold text-red-800">Needs review — outside billing period</p>
+            <p className="font-semibold">{b.brand_name || b.client?.company_name} · {b.client?.company_name} · {b.billboard?.name}</p>
+            <p>Campaign: {b.start_date} → {b.end_date} · Saved month: {p.month}</p>
+            <p>Saved amount: RM {p.amount.toLocaleString('en-MY', { minimumFractionDigits: 2 })} · Original invoice number: <strong className={p.invoice_number?.trim() ? 'text-red-800' : ''}>{p.invoice_number || 'None saved'}</strong></p>
+            <p>Saved payment status: {PAYMENT_STATUS_DISPLAY[p.status]?.label || p.status}{isProfitShareTriggered(b.id, p.month) ? ' · Profit Sharing already triggered (saved status retained above)' : ''}</p>
+            {billingUncertainty(b) && <p>{billingUncertainty(b)}</p>}
+          </article>
+        ))}
+      </section>
+      {uncertainBookings.length > 0 && <section aria-label="Billing inference uncertainties" className="rounded border border-amber-300 bg-amber-50 p-3 text-xs space-y-2">
+        <h3 className="font-semibold">Billing inference needs confirmation ({uncertainBookings.length}) · All months, selected billboard</h3>
+        {uncertainBookings.map(b => <p key={b.id}>{b.brand_name || b.client?.company_name} · {b.billboard?.name} · {b.start_date} → {b.end_date}: {billingUncertainty(b)}</p>)}
+      </section>}
+      <p className="text-xs text-gray-600">Normal rows use the full monthly rate for N consecutive months from the start month, matching Sales Summary total/rate inference, not campaign end dates. Completed includes existing Profit Sharing overrides; it is not independent proof of bank receipt.</p>
       {/* Grand Summary */}
       <Card>
         <CardContent className="p-4">
@@ -438,7 +468,7 @@ export default function AccountsPage() {
           </div>
 
           {/* Payment Status Summary */}
-          <h4 className="text-xs font-semibold text-gray-500 mb-2">Payment Collection</h4>
+          <h4 className="text-xs font-semibold text-gray-500 mb-2">Normal billable Payment Collection</h4>
           <div className="grid grid-cols-3 gap-2 text-xs">
             <div className="bg-yellow-50 rounded p-2 text-center border border-yellow-200">
               <p className="text-[10px] text-yellow-700">📋 Pending Invoice</p>
@@ -468,7 +498,7 @@ export default function AccountsPage() {
                   <p className="text-xs text-gray-500">{s.billboard.location}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="text-xs">{s.activeThisMonth.length} active</Badge>
+                  <Badge variant="secondary" className="text-xs">{s.activeThisMonth.length} billable</Badge>
                   <p className="text-sm font-bold text-blue-700">RM {Math.round(s.monthRevenue).toLocaleString()}</p>
                 </div>
               </div>
@@ -501,14 +531,14 @@ export default function AccountsPage() {
                     const status = getPaymentStatus(b.id, monthKey)
                     const display = PAYMENT_STATUS_DISPLAY[status]
                     const isExpanded = expandedBookings.has(b.id)
-                    const bookingMonths = getMonthsBetween(parseISO(b.start_date), parseISO(b.end_date))
+                    const bookingMonths = accountMonths(b)
 
                     return (
                       <div key={b.id} className="border rounded-lg overflow-hidden">
                         {/* Main row - clickable to change this month's status */}
-                        <div className="flex items-center justify-between px-3 py-2 bg-gray-50">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold truncate">{b.brand_name || b.client?.company_name}</p>
+                        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-gray-50">
+                          <div className="w-full sm:w-auto sm:flex-1 min-w-0">
+                            <p className="text-xs font-semibold break-words">{b.brand_name || b.client?.company_name}</p>
                             <p className="text-[10px] text-gray-400">{b.client?.company_name}{b.sales_person ? ` • ${b.sales_person}` : ''}</p>
                           </div>
                           <div className="flex items-center gap-2">
@@ -566,7 +596,7 @@ export default function AccountsPage() {
                             ) : (
                               <Badge variant="outline" className={`text-[10px] ${display.color}`}>{display.icon} {display.label}</Badge>
                             )}
-                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => toggleExpanded(b.id)}>
+                            <Button aria-label={`Billable months for ${b.brand_name || b.client?.company_name}`} aria-expanded={isExpanded} size="icon" variant="ghost" className="h-6 w-6" onClick={() => toggleExpanded(b.id)}>
                               {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                             </Button>
                           </div>
@@ -576,7 +606,7 @@ export default function AccountsPage() {
                         {isExpanded && (
                           <div className="border-t bg-white">
                             <div className="px-3 py-1.5 bg-gray-100 text-[10px] text-gray-500 font-medium">
-                              All months: {format(parseISO(b.start_date), 'dd MMM yy')} → {format(parseISO(b.end_date), 'dd MMM yy')}
+                              Billable months · Campaign: {format(parseISO(b.start_date), 'dd MMM yy')} → {format(parseISO(b.end_date), 'dd MMM yy')}
                             </div>
                             {bookingMonths.map(m => {
                               const mKey = format(m, 'yyyy-MM')
@@ -586,7 +616,7 @@ export default function AccountsPage() {
                               return (
                                 <div
                                   key={mKey}
-                                  className={`flex items-center justify-between px-3 py-1.5 border-t text-xs ${isCurrentMonth ? 'bg-yellow-50' : ''}`}
+                                  className={`flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 border-t text-xs ${isCurrentMonth ? 'bg-yellow-50' : ''}`}
                                 >
                                   <span className={`${isCurrentMonth ? 'font-semibold' : 'text-gray-600'}`}>
                                     {format(m, 'MMM yyyy')}
