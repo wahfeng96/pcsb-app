@@ -2,15 +2,15 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { format, startOfMonth, addMonths, subMonths, parseISO, isSameMonth } from 'date-fns'
 import { getRevenueMonths } from '@/lib/booking-utils'
+import { filterSalesBookings, salespersonOptions } from '@/lib/sales-summary-filter'
 import type { Billboard, Booking, Client } from '@/types/database'
 
 type BookingWithRefs = Booking & { client: Client; billboard: Billboard }
-type ProfitShareRecord = { id: string; billboard_id: string; sales_person: string; month: string; amount: number; status: 'pending_payment' | 'waiting_profit_share' | 'settled' }
+type ProfitShareRecord = { id: string; booking_id?: string; billboard_id: string; sales_person: string; month: string; amount: number; status: 'pending_payment' | 'waiting_profit_share' | 'settled' }
 type MonthlyPayment = { id: string; booking_id: string; month: string; amount: number; status: string; invoice_number?: string }
 
 export default function SalesSummaryPage() {
@@ -20,6 +20,8 @@ export default function SalesSummaryPage() {
   const [profitRecords, setProfitRecords] = useState<ProfitShareRecord[]>([])
   const [monthlyPayments, setMonthlyPayments] = useState<MonthlyPayment[]>([])
   const [loading, setLoading] = useState(true)
+  const [selectedSalesperson, setSelectedSalesperson] = useState('all')
+  const salespeople = useMemo(() => salespersonOptions(bookings), [bookings])
   const [selectedBb, setSelectedBb] = useState<string>('all')
   const [startMonth, setStartMonth] = useState(startOfMonth(new Date(new Date().getFullYear(), 0, 1))) // Jan this year
 
@@ -42,7 +44,7 @@ export default function SalesSummaryPage() {
 
   // Get booking-month status from profit_sharing records
   function getBookingMonthStatus(bookingId: string, monthKey: string): ProfitShareRecord['status'] {
-    const rec = profitRecords.find(r => (r as any).booking_id === bookingId && r.month === monthKey)
+    const rec = profitRecords.find(r => r.booking_id === bookingId && r.month === monthKey)
     return rec?.status || 'pending_payment'
   }
 
@@ -61,9 +63,8 @@ export default function SalesSummaryPage() {
 
   // Filter bookings by billboard
   const filteredBookings = useMemo(() => {
-    if (selectedBb === 'all') return bookings
-    return bookings.filter(b => b.billboard_id === selectedBb)
-  }, [bookings, selectedBb])
+    return filterSalesBookings(bookings, selectedBb, selectedSalesperson)
+  }, [bookings, selectedBb, selectedSalesperson])
 
   // Build rows: each unique client+brand+sales combo
   const rows = useMemo(() => {
@@ -124,6 +125,15 @@ export default function SalesSummaryPage() {
     <div className="space-y-4">
       <h1 className="text-2xl font-bold text-gray-900">Sales Summary</h1>
 
+      <div className="w-full sm:max-w-xs">
+        <label htmlFor="salesperson-filter" className="block text-sm font-medium text-gray-700 mb-1">Salesperson</label>
+        <select id="salesperson-filter" value={selectedSalesperson} onChange={e => setSelectedSalesperson(e.target.value)} className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-600">
+          <option value="all">All salespeople</option>
+          <option value="unassigned">Unassigned</option>
+          {salespeople.map(person => <option key={person.value} value={person.value}>{person.label}</option>)}
+        </select>
+      </div>
+
       {/* Billboard filter */}
       <div className="flex gap-2 overflow-x-auto pb-1">
         <Button size="sm" variant={selectedBb === 'all' ? 'default' : 'outline'} onClick={() => setSelectedBb('all')} className={selectedBb === 'all' ? 'bg-red-600 hover:bg-red-700' : ''}>All</Button>
@@ -134,9 +144,9 @@ export default function SalesSummaryPage() {
 
       {/* Year navigation */}
       <div className="flex items-center justify-between bg-white rounded-lg border p-2">
-        <Button size="icon" variant="ghost" onClick={() => setStartMonth(subMonths(startMonth, 12))}><ChevronLeft className="h-4 w-4" /></Button>
+        <Button size="icon" variant="ghost" aria-label="Previous year" onClick={() => setStartMonth(subMonths(startMonth, 12))}><ChevronLeft className="h-4 w-4" /></Button>
         <h2 className="font-semibold">{format(startMonth, 'yyyy')} — {format(addMonths(startMonth, 11), 'yyyy')}</h2>
-        <Button size="icon" variant="ghost" onClick={() => setStartMonth(addMonths(startMonth, 12))}><ChevronRight className="h-4 w-4" /></Button>
+        <Button size="icon" variant="ghost" aria-label="Next year" onClick={() => setStartMonth(addMonths(startMonth, 12))}><ChevronRight className="h-4 w-4" /></Button>
       </div>
 
       {/* Spreadsheet table */}

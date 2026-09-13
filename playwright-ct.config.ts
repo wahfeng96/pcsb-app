@@ -7,6 +7,7 @@ export default defineConfig({
     ctViteConfig: {
       resolve: {
         alias: {
+          '@/lib/supabase/client': `${process.cwd()}/tests/sales-summary-client.ts`,
           '@': `${process.cwd()}/src`,
         },
       },
