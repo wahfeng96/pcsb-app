@@ -57,6 +57,8 @@ export interface Booking {
   status: BookingStatus
   payment_status: PaymentStatus
   spot_size: number
+  campaign_name?: string | null
+  booking_number?: string | null
   brand_name: string | null
   sales_person: string | null
   commission_percent: number

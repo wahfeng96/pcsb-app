@@ -1,0 +1,64 @@
+import { expect, test } from '@playwright/experimental-ct-react'
+import ClientDetailPage from '../src/app/(app)/clients/[id]/page'
+for (const mobile of [false, true]) {
+ test(`booking edit persistence filters and role ${mobile ? 'mobile' : 'desktop'}`, async ({ mount, page }) => {
+  await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 })
+  await page.evaluate(() => {
+   const year = new Date().getFullYear()
+   const bb = { id: 'screen', name: 'Synthetic Screen', max_slots: 10 }
+   const base = { client_id: 'client-test', billboard_id: 'screen', billboard: bb, start_date: `${year}-01-01`, end_date: `${year}-12-31`, spot_size: 1, slot_number: 1, monthly_rate: 0, total_amount: 0, status: 'live', payment_status: 'pending_payment' }
+   Object.assign(window, { accountsCanEdit: true, salesFixture: { clients: [{ id: 'client-test', company_name: 'Synthetic Client', contact_person: 'Tester' }], billboards: [bb], bookings: [{ ...base, id: 'legacy', brand_name: 'Alpha' }, { ...base, id: 'b', brand_name: 'Beta', campaign_name: 'Other' }] } })
+  })
+  const component = await mount(<ClientDetailPage />)
+  await page.getByRole('button', { name: 'Edit booking Alpha', exact: true }).click()
+  await expect(page.getByLabel('Campaign name (optional)')).toHaveValue('')
+  await page.getByLabel('Campaign name (optional)').fill(' <img src=x onerror=alert(1)> ')
+  await page.getByLabel('OD / booking number (optional)').fill(' OD-123 ')
+  await page.getByRole('button', { name: 'Save Booking', exact: true }).click()
+  await expect(page.getByText('Campaign: <img src=x onerror=alert(1)>', { exact: true })).toBeVisible()
+  await component.unmount()
+  await mount(<ClientDetailPage />)
+  await page.getByLabel('Brand', { exact: true }).selectOption('Alpha')
+  await expect(page.getByLabel('Campaign', { exact: true }).locator('option')).toHaveCount(2)
+  await page.getByLabel('Campaign', { exact: true }).selectOption('<img src=x onerror=alert(1)>')
+  await expect(page.getByText('Brand: Beta', { exact: true })).toHaveCount(0)
+  await page.getByPlaceholder('🔍 Search brand name...').fill('missing')
+  await expect(page.getByText('No bookings for this period')).toBeVisible()
+  await page.getByPlaceholder('🔍 Search brand name...').fill('')
+  await page.screenshot({ path: `screenshots/booking-${mobile ? 'mobile' : 'desktop'}.png`, fullPage: true })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.getByLabel('Brand', { exact: true }).selectOption('Beta')
+  await expect(page.getByLabel('Campaign', { exact: true })).toHaveValue('')
+  await page.getByLabel('Brand', { exact: true }).selectOption('Alpha')
+  await page.getByRole('button', { name: 'Edit booking Alpha', exact: true }).click()
+  await expect(page.getByLabel('OD / booking number (optional)')).toHaveValue('OD-123')
+  await page.getByLabel('Campaign name (optional)').fill('')
+  await page.getByLabel('OD / booking number (optional)').fill('')
+  await page.getByRole('button', { name: 'Save Booking', exact: true }).click()
+  await expect(page.getByText('OD / booking number: OD-123')).toHaveCount(0)
+  // Exercise actual create handler twice: optional blanks and populated metadata.
+  await page.getByLabel('Brand', { exact: true }).selectOption('')
+  for (const populated of [false, true]) {
+   await page.getByRole('button', { name: 'Add Booking', exact: true }).click()
+   await page.getByRole('button', { name: 'Full Spot (1)', exact: true }).click()
+   const year = new Date().getFullYear()
+   await page.locator('input[type="date"]').nth(0).fill(`${year}-09-01`)
+   await page.locator('input[type="date"]').nth(1).fill(`${year}-09-30`)
+   if (populated) {
+    await page.getByLabel('Campaign name (optional)').fill(' New Launch ')
+    await page.getByLabel('OD / booking number (optional)').fill(' NEW-OD ')
+   }
+   await page.locator('form').getByRole('button', { name: 'Add Booking', exact: true }).click()
+   await expect(page.getByLabel('Campaign name (optional)')).toHaveCount(0)
+  }
+  const saved = await page.evaluate(() => (window as unknown as { salesFixture: { bookings: Record<string, unknown>[] } }).salesFixture.bookings.slice(-2))
+  expect(saved[0].campaign_name).toBeNull()
+  expect(saved[0].booking_number).toBeNull()
+  expect(saved[1].campaign_name).toBe('New Launch')
+  expect(saved[1].booking_number).toBe('NEW-OD')
+  await page.evaluate(() => { Object.assign(window, { accountsCanEdit: false }) })
+  await page.getByLabel('Brand', { exact: true }).selectOption('Beta')
+  await expect(page.getByRole('button', { name: 'Add Booking', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Edit booking/ })).toHaveCount(0)
+ })
+}

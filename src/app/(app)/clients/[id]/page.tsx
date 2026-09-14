@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,6 +16,8 @@ import { getBillboardMaxSlots } from '@/lib/billboard-slots'
 import type { Client, ClientStage, Booking, Billboard, BookingStatus, PaymentStatus } from '@/types/database'
 import { BOOKING_STATUS_CONFIG, PAYMENT_STATUS_CONFIG } from '@/types/database'
 import Link from 'next/link'
+import { bookingMetadata, metadataOptions, matchesMetadata } from '@/lib/booking-metadata'
+import { BookingMetadataFields, BookingMetadataFilters, BookingMetadataDetails } from '@/components/booking-metadata'
 import { useRole } from '@/lib/hooks/use-role'
 
 const CLIENT_STATUS_CONFIG = {
@@ -37,7 +39,7 @@ export default function ClientDetailPage() {
   const [editingBookingId, setEditingBookingId] = useState<string | null>(null)
   const [form, setForm] = useState<Partial<Client>>({})
   const [bookingForm, setBookingForm] = useState({
-    billboard_id: '', spot_size: '' as any, start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', commission_percent: 0, notes: '',
+    billboard_id: '', spot_size: '' as any, start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', campaign_name: '', booking_number: '', sales_person: '', commission_percent: 0, notes: '',
     status: 'upcoming' as BookingStatus, payment_status: 'pending_payment' as PaymentStatus, // status auto-computed on save
     _months: 0,
   })
@@ -48,8 +50,15 @@ export default function ClientDetailPage() {
   const [showSalesSuggestions, setShowSalesSuggestions] = useState(false)
   const [filterYear, setFilterYear] = useState(new Date().getFullYear())
   const [filterMonth, setFilterMonth] = useState<number | 'all'>('all')
-  const [filterBrand, setFilterBrand] = useState<string>('all')
+  const [filterBrand, setFilterBrand] = useState<string>('')
   const [brandSearch, setBrandSearch] = useState('')
+  const [filterCampaign, setFilterCampaign] = useState('')
+  const metadataBrands = useMemo(() => metadataOptions(bookings, 'brand_name'), [bookings])
+  const metadataCampaigns = useMemo(() => metadataOptions(bookings, 'campaign_name', filterBrand), [bookings, filterBrand])
+  useEffect(() => {
+    if (filterCampaign && !metadataCampaigns.includes(filterCampaign)) setFilterCampaign('')
+    if (filterBrand !== '' && !metadataBrands.includes(filterBrand)) setFilterBrand('')
+  }, [metadataBrands, metadataCampaigns, filterBrand, filterCampaign])
   const bookingFormRef = useRef<HTMLDivElement>(null)
 
   async function load() {
@@ -104,14 +113,18 @@ export default function ClientDetailPage() {
 
   async function handleAddBooking(e: React.FormEvent) {
     e.preventDefault()
+    if (!canEdit) return
+    let metadata: ReturnType<typeof bookingMetadata>
+    try { metadata = bookingMetadata(bookingForm) } catch (error) { alert((error as Error).message); return }
     if (!bookingForm.spot_size) { alert('Please select spot size (0.5 or 1)'); return }
-    const { _months, ...bookingDataWithCommission } = bookingForm
+    const { _months, ...bookingDataWithCommission } = { ...bookingForm, ...metadata }
     const commission_percent = bookingDataWithCommission.commission_percent || 0
     // Auto-compute status from dates
     bookingDataWithCommission.status = computeBookingStatus(bookingDataWithCommission.start_date, bookingDataWithCommission.end_date) as any
     let bookingId: string
     if (editingBookingId) {
-      await supabase.from('bookings').update(bookingDataWithCommission).eq('id', editingBookingId)
+      const { error } = await supabase.from('bookings').update(bookingDataWithCommission).eq('id', editingBookingId)
+      if (error) { alert('Error: ' + error.message); return }
       bookingId = editingBookingId
       setEditingBookingId(null)
     } else {
@@ -163,7 +176,7 @@ export default function ClientDetailPage() {
     } catch { /* commissions table may not exist yet */ }
 
     setShowAddBooking(false)
-    setBookingForm({ billboard_id: billboards[0]?.id || '', spot_size: '' as any, start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', commission_percent: 0, notes: '', status: 'upcoming', payment_status: 'pending_payment', _months: 0 })
+    setBookingForm({ billboard_id: billboards[0]?.id || '', spot_size: '' as any, start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', campaign_name: '', booking_number: '', sales_person: '', commission_percent: 0, notes: '', status: 'upcoming', payment_status: 'pending_payment', _months: 0 })
     load()
   }
 
@@ -171,7 +184,7 @@ export default function ClientDetailPage() {
     setBookingForm({
       billboard_id: b.billboard_id, spot_size: b.spot_size || 1, start_date: b.start_date, end_date: b.end_date,
       monthly_rate: b.monthly_rate, _months: b.monthly_rate ? Math.round(b.total_amount / b.monthly_rate) : calcMonths(b.start_date, b.end_date), total_amount: b.total_amount, slot_number: b.slot_number,
-      brand_name: b.brand_name || '', sales_person: b.sales_person || '', commission_percent: b.commission_percent || 0, notes: b.notes || '',
+      brand_name: b.brand_name || '', campaign_name: b.campaign_name || '', booking_number: b.booking_number || '', sales_person: b.sales_person || '', commission_percent: b.commission_percent || 0, notes: b.notes || '',
       status: b.status, payment_status: b.payment_status,
     })
     setEditingBookingId(b.id)
@@ -258,7 +271,7 @@ export default function ClientDetailPage() {
       {/* Bookings */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Bookings</h2>
-        {canEdit && <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => { setShowAddBooking(!showAddBooking); if (showAddBooking) { setEditingBookingId(null); setBookingForm({ billboard_id: billboards[0]?.id || '', spot_size: '' as any, start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', sales_person: '', notes: '', status: 'upcoming', payment_status: 'pending_payment', _months: 0 }) } }}>{showAddBooking ? <><X className="h-4 w-4 mr-1" /> Cancel</> : <><Plus className="h-4 w-4 mr-1" /> Add Booking</>}</Button>}
+        {canEdit && <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => { setShowAddBooking(!showAddBooking); if (showAddBooking) { setEditingBookingId(null); setBookingForm({ billboard_id: billboards[0]?.id || '', spot_size: '' as any, start_date: '', end_date: '', monthly_rate: 0, total_amount: 0, slot_number: 1, brand_name: '', campaign_name: '', booking_number: '', sales_person: '', commission_percent: 0, notes: '', status: 'upcoming', payment_status: 'pending_payment', _months: 0 }) } }}>{showAddBooking ? <><X className="h-4 w-4 mr-1" /> Cancel</> : <><Plus className="h-4 w-4 mr-1" /> Add Booking</>}</Button>}
       </div>
 
       {/* Year/Month filter */}
@@ -278,24 +291,17 @@ export default function ClientDetailPage() {
           <Input
             placeholder="🔍 Search brand name..."
             value={brandSearch}
-            onChange={e => { setBrandSearch(e.target.value); setFilterBrand('all') }}
+            onChange={e => setBrandSearch(e.target.value)}
             className="h-7 text-xs"
           />
           {brandSearch && (
             <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" onClick={() => setBrandSearch('')}><X className="h-3.5 w-3.5" /></button>
           )}
         </div>
-        {(() => {
-          const brands = [...new Set(bookings.map(b => b.brand_name).filter(Boolean))].sort() as string[]
-          return !brandSearch && brands.length > 0 ? (
-            <div className="flex gap-1 overflow-x-auto pb-1">
-              <Button size="sm" variant={filterBrand === 'all' ? 'default' : 'outline'} onClick={() => setFilterBrand('all')} className={`text-[10px] h-6 px-2 ${filterBrand === 'all' ? 'bg-red-600 hover:bg-red-700' : ''}`}>All Brands</Button>
-              {brands.map(brand => (
-                <Button key={brand} size="sm" variant={filterBrand === brand ? 'default' : 'outline'} onClick={() => { setFilterBrand(brand); setBrandSearch('') }} className={`text-[10px] h-6 px-2 whitespace-nowrap ${filterBrand === brand ? 'bg-red-600 hover:bg-red-700' : ''}`}>{brand}</Button>
-              ))}
-            </div>
-          ) : null
-        })()}
+        <BookingMetadataFilters brands={metadataBrands} campaigns={metadataCampaigns}
+          brand={filterBrand} campaign={filterCampaign}
+          onBrandChange={value => { setFilterBrand(value); setFilterCampaign('') }}
+          onCampaignChange={setFilterCampaign} />
       </div>
 
       {showAddBooking && (
@@ -401,8 +407,9 @@ export default function ClientDetailPage() {
                   <option value="settled">Settled</option>
                 </select>
               </div>
+              <BookingMetadataFields value={bookingForm} onChange={patch => setBookingForm(f => ({ ...f, ...patch }))} />
               <div><Label>Notes</Label><Textarea value={bookingForm.notes} onChange={e => setBookingForm(f => ({ ...f, notes: e.target.value }))} /></div>
-              <Button type="submit" className="w-full bg-red-600 hover:bg-red-700">Add Booking</Button>
+              <Button type="submit" className="w-full bg-red-600 hover:bg-red-700">{editingBookingId ? 'Save Booking' : 'Add Booking'}</Button>
             </form>
           </CardContent>
         </Card>
@@ -411,10 +418,7 @@ export default function ClientDetailPage() {
       <div className="space-y-2">
         {(() => {
           const filtered = bookings.filter(b => {
-            // Brand filter (search or button)
-            if (brandSearch) {
-              if (!b.brand_name?.toLowerCase().includes(brandSearch.toLowerCase())) return false
-            } else if (filterBrand !== 'all' && b.brand_name !== filterBrand) return false
+            if (!matchesMetadata(b, filterBrand, filterCampaign, brandSearch)) return false
             if (filterMonth === 'all') {
               const bStart = parseISO(b.start_date)
               const bEnd = parseISO(b.end_date)
@@ -436,11 +440,12 @@ export default function ClientDetailPage() {
                 <div className="flex gap-1 items-center">
                   <Badge variant="secondary" className={BOOKING_STATUS_CONFIG[computeBookingStatus(b.start_date, b.end_date, b.status)]?.color + ' text-[10px]'}>{BOOKING_STATUS_CONFIG[computeBookingStatus(b.start_date, b.end_date, b.status)]?.label}</Badge>
                   <Badge variant="outline" className={PAYMENT_STATUS_CONFIG[b.payment_status]?.color + ' text-[10px]'}>{PAYMENT_STATUS_CONFIG[b.payment_status]?.label}</Badge>
-                  {canEdit && <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => startEditBooking(b)}><Edit2 className="h-3 w-3" /></Button>}
+                  {canEdit && <Button size="icon" variant="ghost" className="h-6 w-6" aria-label={`Edit booking ${b.brand_name || b.id}`} onClick={() => startEditBooking(b)}><Edit2 className="h-3 w-3" /></Button>}
                   {canEdit && <Button size="icon" variant="ghost" className="h-6 w-6 text-red-600" onClick={() => deleteBooking(b.id)}><Trash2 className="h-3 w-3" /></Button>}
                 </div>
               </div>
               {b.brand_name && <p className="text-xs font-medium text-gray-700">Brand: {b.brand_name}</p>}
+              <BookingMetadataDetails booking={b} />
               <span className="text-[10px] text-gray-400">{b.spot_size === 0.5 ? 'Half Spot' : 'Full Spot'}</span>
               {b.sales_person && <p className="text-xs text-gray-500">Sales: {b.sales_person}{b.commission_percent ? ` • ${b.commission_percent}% commission` : ''}</p>}
               <p className="text-xs text-gray-500">
