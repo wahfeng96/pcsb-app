@@ -17,3 +17,7 @@ Vitest metadata tests cover legacy rows, whitespace/null, serialization, validat
 Build uses synthetic public config locally; build configuration already skips lint/type errors. New metadata modules pass focused lint. Existing client detail lint errors (any/unused imports/unused variables) and unrelated repository TypeScript errors predate this release; no new errors in changed metadata modules. Local Next chunk comparisons must account for environment-inlined public config; compare feature-specific emitted chunks rather than assume all shared chunk hashes match synthetic builds.
 
 Screenshots/backups/build evidence are outside git or ignored. No secrets, production records, Accounts/Calendar/Sales Summary changes, or infrastructure artifacts belong in this commit.
+
+## Location follow-up
+
+Added a separately labelled Location dropdown (All locations plus individual screen name/location labels) only to the Bookings section. Options reuse the existing RLS-scoped billboards result, with stable billboard IDs and safe reset when an option disappears. Location intersects brand, campaign, search and year/month without changing create-form fields or metadata. Desktop/mobile actual-page tests cover mismatched/matching location+brand+campaign, month/search intersection and All locations reset. No additional migration.

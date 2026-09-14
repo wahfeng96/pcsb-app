@@ -53,6 +53,10 @@ export default function ClientDetailPage() {
   const [filterBrand, setFilterBrand] = useState<string>('')
   const [brandSearch, setBrandSearch] = useState('')
   const [filterCampaign, setFilterCampaign] = useState('')
+  const [filterLocation, setFilterLocation] = useState('')
+  useEffect(() => {
+    if (filterLocation && !billboards.some(b => b.id === filterLocation)) setFilterLocation('')
+  }, [billboards, filterLocation])
   const metadataBrands = useMemo(() => metadataOptions(bookings, 'brand_name'), [bookings])
   const metadataCampaigns = useMemo(() => metadataOptions(bookings, 'campaign_name', filterBrand), [bookings, filterBrand])
   useEffect(() => {
@@ -298,6 +302,13 @@ export default function ClientDetailPage() {
             <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" onClick={() => setBrandSearch('')}><X className="h-3.5 w-3.5" /></button>
           )}
         </div>
+        <div>
+          <Label htmlFor="booking-location-filter">Location</Label>
+          <select id="booking-location-filter" className="w-full min-w-0 border rounded-md px-3 py-2 text-sm" value={filterLocation} onChange={e => setFilterLocation(e.target.value)}>
+            <option value="">All locations</option>
+            {billboards.map(b => <option key={b.id} value={b.id}>{b.name}{b.location ? ` — ${b.location}` : ''}</option>)}
+          </select>
+        </div>
         <BookingMetadataFilters brands={metadataBrands} campaigns={metadataCampaigns}
           brand={filterBrand} campaign={filterCampaign}
           onBrandChange={value => { setFilterBrand(value); setFilterCampaign('') }}
@@ -418,6 +429,7 @@ export default function ClientDetailPage() {
       <div className="space-y-2">
         {(() => {
           const filtered = bookings.filter(b => {
+            if (filterLocation && b.billboard_id !== filterLocation) return false
             if (!matchesMetadata(b, filterBrand, filterCampaign, brandSearch)) return false
             if (filterMonth === 'all') {
               const bStart = parseISO(b.start_date)
