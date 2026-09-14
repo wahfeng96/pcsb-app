@@ -14,6 +14,8 @@ import type { Booking, Client, Billboard, ContentChange } from '@/types/database
 import { computeBookingStatus } from '@/lib/booking-utils'
 import { getBillboardMaxSlots } from '@/lib/billboard-slots'
 import { getOccupantsForDate, getOccupiedSlots } from '@/lib/calendar-occupancy'
+import { CalendarBookingLabel } from '@/components/calendar/booking-label'
+import { calendarCampaignSuffix } from '@/lib/calendar-booking-label'
 import { OccupancyPopover } from '@/components/calendar/occupancy-popover'
 
 type BookingWithRefs = Booking & { client: Client; billboard: Billboard }
@@ -179,7 +181,7 @@ export default function CalendarPage() {
             return (
               <div
                 key={day.toISOString()}
-                className={`group bg-white min-h-[65px] p-1 ${isToday(day) ? 'ring-2 ring-red-500 ring-inset' : ''}`}
+                className={`group min-w-0 bg-white min-h-[65px] p-1 ${isToday(day) ? 'ring-2 ring-red-500 ring-inset' : ''}`}
               >
                 <div className="flex items-center justify-between gap-1">
                   <button
@@ -203,12 +205,12 @@ export default function CalendarPage() {
                   {events.slice(0, 3).map((ev, i) => (
                     <div
                       key={`${ev.booking.id}-${ev.type}-${i}`}
-                      title={`${ev.booking.brand_name || ev.booking.client?.company_name} (${ev.type}) — ${ev.booking.billboard?.name || ''}`}
+                      title={`${ev.booking.brand_name || ev.booking.client?.company_name || ''} (${ev.type})${calendarCampaignSuffix(ev.booking.campaign_name)} — ${ev.booking.billboard?.name || ''}`}
                       className={`text-[8px] md:text-[10px] px-1 rounded truncate text-white font-medium cursor-default ${
                         ev.type === 'in' ? 'bg-green-500' : 'bg-red-500'
                       } ${ev.booking.spot_size === 0.5 ? 'w-1/2 opacity-80' : 'w-full'}`}
                     >
-                      {ev.booking.brand_name || ev.booking.client?.company_name} ({ev.type})
+                      <CalendarBookingLabel label={`${ev.booking.brand_name || ev.booking.client?.company_name || ''} (${ev.type})`} campaignName={ev.booking.campaign_name} />
                     </div>
                   ))}
                   {changes.slice(0, Math.max(0, 3 - events.slice(0, 3).length)).map(change => (
@@ -229,23 +231,23 @@ export default function CalendarPage() {
                     </div>
                   ))}
                   {allEntries > 3 && (
-                    <div className="relative group">
-                      <div className="text-[8px] text-gray-500 px-1 cursor-pointer hover:text-red-600 hover:font-bold">+{allEntries - 3}</div>
-                      <div className="hidden group-hover:block absolute z-50 bottom-full left-0 mb-1 bg-gray-900 text-white text-[10px] rounded-lg px-2.5 py-1.5 shadow-lg whitespace-nowrap">
+                    <details className="relative min-w-0">
+                      <summary className="text-[8px] text-gray-500 px-1 cursor-pointer hover:text-red-600 hover:font-bold" aria-label={`More events on ${format(day, 'dd MMM yyyy')}`}>+{allEntries - 3}</summary>
+                      <div className="min-w-0 bg-gray-900 text-white text-[10px] rounded-lg p-1 [overflow-wrap:anywhere]">
                         {events.slice(3).map((ev, i) => (
-                          <div key={i} className="flex items-center gap-1.5 py-0.5">
+                          <div key={i} className="flex min-w-0 items-start gap-1.5 py-0.5">
                             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${ev.type === 'in' ? 'bg-green-400' : 'bg-red-400'}`} />
-                            {ev.booking.brand_name || ev.booking.client?.company_name} ({ev.type})
+                            <CalendarBookingLabel label={`${ev.booking.brand_name || ev.booking.client?.company_name || ''} (${ev.type})`} campaignName={ev.booking.campaign_name} />
                           </div>
                         ))}
                         {changes.slice(Math.max(0, 3 - events.slice(0, 3).length)).map(change => (
-                          <div key={change.id} className="flex items-center gap-1.5 py-0.5" title={change.billboard?.name || ''}>
+                          <div key={change.id} className="flex min-w-0 items-start gap-1.5 py-0.5" title={change.billboard?.name || ''}>
                             <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-blue-400" />
                             {change.brand_name} — {change.billboard?.name}
                           </div>
                         ))}
                       </div>
-                    </div>
+                    </details>
                   )}
                 </div>
               </div>
@@ -315,7 +317,7 @@ export default function CalendarPage() {
                     0/{occupancyMaxSlots}
                   </div>
                 )}
-                <div className="hidden sm:block pt-4 text-center text-[9px] opacity-75">occupied</div>
+                <div className="pointer-events-none hidden sm:block pt-4 text-center text-[9px] opacity-75">occupied</div>
               </div>
             )
           })}
@@ -342,7 +344,7 @@ export default function CalendarPage() {
                 <CardContent className="p-3 flex items-center gap-3">
                   <div className={`w-2 h-8 rounded-full ${ev.type === 'in' ? 'bg-green-500' : 'bg-red-500'}`} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{ev.booking.brand_name || ev.booking.client?.company_name}</p>
+                    <div className="text-sm font-medium"><CalendarBookingLabel label={ev.booking.brand_name || ev.booking.client?.company_name || ''} campaignName={ev.booking.campaign_name} /></div>
                     <p className="text-xs text-gray-500">{ev.booking.billboard?.name}</p>
                   </div>
                   <div className="text-right">

@@ -1,3 +1,5 @@
+import { calendarCampaignSuffix } from './calendar-booking-label'
+
 export interface OccupancyBooking {
   id: string
   billboard_id: string
@@ -5,6 +7,7 @@ export interface OccupancyBooking {
   end_date: string
   status: string
   spot_size?: number | null
+  campaign_name?: string | null
   brand_name?: string | null
   client?: { company_name?: string | null } | null
 }
@@ -29,7 +32,7 @@ export function getOccupantsForDate<T extends OccupancyBooking>(
     )
     .map(booking => ({
       id: booking.id,
-      name: booking.brand_name?.trim() || booking.client?.company_name?.trim() || 'Unnamed booking',
+      name: (booking.brand_name?.trim() || booking.client?.company_name?.trim() || 'Unnamed booking') + calendarCampaignSuffix(booking.campaign_name),
       spotSize: booking.spot_size || 1,
     }))
 }

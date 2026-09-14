@@ -108,7 +108,7 @@ export function OccupancyPopover({ dateLabel, screenName, occupied, maxSlots, oc
       <ul className="mt-2 space-y-1.5" aria-label="Booking occupants">
         {occupants.map(occupant => (
           <li key={occupant.id} className="flex min-w-0 items-start justify-between gap-4 text-xs">
-            <span className="break-words font-medium">{occupant.name}</span>
+            <span className="min-w-0 [overflow-wrap:anywhere] font-medium">{occupant.name}</span>
             <span className="shrink-0 text-gray-300">{formatSlotAmount(occupant.spotSize)}</span>
           </li>
         ))}
