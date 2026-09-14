@@ -15,7 +15,7 @@ describe('calendar campaign labels', () => {
   })
   it.each([' Launch 2026 ', 'Long'.repeat(100), '<img src=x onerror=alert(1)> & "Launch"'])('keeps full campaign as safe text and a keyboard/touch disclosure: %s', campaignName => {
     const { container } = render(<CalendarBookingLabel label="Brand (in)" campaignName={campaignName} />)
-    const fullLabel = `Brand (in) — Campaign: ${campaignName.trim()}`
+    const fullLabel = `Brand (in) — ${campaignName.trim()}`
     const summary = container.querySelector('summary')!
     expect(summary).toHaveTextContent(fullLabel)
     expect(summary).toHaveAttribute('title', fullLabel)
@@ -34,7 +34,7 @@ describe('calendar campaign labels', () => {
     ]
     const occupants = getOccupantsForDate(bookings, 'screen', '2026-09-02')
     expect(occupants).toEqual([
-      { id: 'a', name: 'Brand — Campaign: Launch', spotSize: 0.5 },
+      { id: 'a', name: 'Brand — Launch', spotSize: 0.5 },
       { id: 'b', name: 'Client', spotSize: 1 },
     ])
     expect(getOccupiedSlots(occupants)).toBe(1.5)
