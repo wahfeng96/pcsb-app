@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
-import { APP_PAGES } from '@/lib/page-access'
+import { APP_PAGES, DEFAULT_ALLOWED_PAGES } from '@/lib/page-access'
 
 type BillboardAccessInput = { billboard_id: string; can_edit: boolean }
 
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   const validPages = new Set<string>(APP_PAGES.map(page => page.href))
   const allowedPages = Array.isArray(body.allowed_pages)
     ? [...new Set<string>(body.allowed_pages.filter((page: unknown): page is string => typeof page === 'string' && validPages.has(page)))]
-    : APP_PAGES.map(page => page.href)
+    : DEFAULT_ALLOWED_PAGES
   const billboardAccess: BillboardAccessInput[] = Array.isArray(body.billboard_access)
     ? body.billboard_access.filter((access: unknown): access is BillboardAccessInput => {
         if (!access || typeof access !== 'object') return false

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Calendar, Users, Building2, MoreHorizontal, FileText, BarChart3, HandCoins, Percent, Shield, StickyNote, X } from 'lucide-react'
+import { LayoutDashboard, Calendar, Users, Building2, MoreHorizontal, FileText, BarChart3, HandCoins, Percent, Shield, StickyNote, X, CircleDollarSign } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useProfile } from '@/lib/hooks/use-profile'
 import { canAccessPage } from '@/lib/page-access'
@@ -18,6 +18,7 @@ const mainNav = [
 const moreNav = [
   { href: '/accounts', label: 'Accounts', icon: FileText },
   { href: '/sales-summary', label: 'Sales Summary', icon: BarChart3 },
+  { href: '/profit-loss', label: 'P&L', icon: CircleDollarSign },
   { href: '/profit-sharing', label: 'Profit Sharing', icon: HandCoins },
   { href: '/commission', label: 'Commission', icon: Percent },
   { href: '/users', label: 'Users', icon: Shield },

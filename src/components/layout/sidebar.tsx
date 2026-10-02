@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Calendar, Users, Building2, FileText, BarChart3, HandCoins, Percent, Shield, StickyNote, LogOut } from 'lucide-react'
+import { LayoutDashboard, Calendar, Users, Building2, FileText, BarChart3, HandCoins, Percent, Shield, StickyNote, LogOut, CircleDollarSign } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useProfile } from '@/lib/hooks/use-profile'
@@ -16,6 +16,7 @@ const navItems = [
   { href: '/billboards', label: 'Billboards', icon: Building2 },
   { href: '/accounts', label: 'Accounts', icon: FileText },
   { href: '/sales-summary', label: 'Sales Summary', icon: BarChart3 },
+  { href: '/profit-loss', label: 'P&L', icon: CircleDollarSign },
   { href: '/profit-sharing', label: 'Profit Sharing', icon: HandCoins },
   { href: '/commission', label: 'Commission', icon: Percent },
   { href: '/users', label: 'Users', icon: Shield },

@@ -47,6 +47,12 @@ export default function AccountsPage() {
   const [viewMonth, setViewMonth] = useState(startOfMonth(new Date()))
   const [selectedBb, setSelectedBb] = useState<string>('all')
   const [invoiceFilter, setInvoiceFilter] = useState('')
+
+  useEffect(() => {
+    const invoice = new URLSearchParams(window.location.search).get('invoice')
+    if (invoice) setInvoiceFilter(invoice)
+  }, [])
+
   const [expandedBookings, setExpandedBookings] = useState<Set<string>>(new Set())
   const [invoiceInputKey, setInvoiceInputKey] = useState<string | null>(null) // "bookingId|monthKey"
   const invoiceInputRef = useRef<HTMLInputElement>(null)

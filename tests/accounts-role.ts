@@ -1,3 +1,7 @@
 export function useRole() {
-  return { canEdit: Boolean((window as unknown as { accountsCanEdit?: boolean }).accountsCanEdit) }
+  const accountsOwner = Boolean((window as unknown as { accountsCanEdit?: boolean }).accountsCanEdit)
+  return {
+    canEdit: accountsOwner,
+    isOwner: accountsOwner || Boolean((window as unknown as { profitLossOwner?: boolean }).profitLossOwner),
+  }
 }

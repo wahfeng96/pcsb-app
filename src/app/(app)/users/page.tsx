@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Users, Edit2, Eye, Trash2, Plus, X, Check, UserCheck, UserX, ShieldCheck, ShieldX } from 'lucide-react'
 import type { Profile, Billboard, UserRole } from '@/types/database'
 import { useRole } from '@/lib/hooks/use-role'
-import { APP_PAGES } from '@/lib/page-access'
+import { APP_PAGES, DEFAULT_ALLOWED_PAGES } from '@/lib/page-access'
 
 type UserAccess = {
   user_id: string
@@ -33,7 +33,7 @@ export default function UsersPage() {
   const [creatingUser, setCreatingUser] = useState(false)
   const [createError, setCreateError] = useState('')
   const [createForm, setCreateForm] = useState({ name: '', email: '', password: '', role: 'team' as 'team' | 'partner' })
-  const [createPages, setCreatePages] = useState<string[]>(APP_PAGES.map(page => page.href))
+  const [createPages, setCreatePages] = useState<string[]>(DEFAULT_ALLOWED_PAGES)
   const [createBillboards, setCreateBillboards] = useState<Record<string, 'view' | 'edit'>>({})
 
   async function load() {
@@ -62,7 +62,7 @@ export default function UsersPage() {
       selected[a.billboard_id] = a.can_edit ? 'edit' : 'view'
     })
     setSelectedBillboards(selected)
-    setSelectedPages(user?.allowed_pages ?? APP_PAGES.map(page => page.href))
+    setSelectedPages(user?.allowed_pages ?? DEFAULT_ALLOWED_PAGES)
     setEditingUser(userId)
   }
 
@@ -134,7 +134,7 @@ export default function UsersPage() {
 
   function openCreateUser() {
     setCreateForm({ name: '', email: '', password: '', role: 'team' })
-    setCreatePages(APP_PAGES.map(page => page.href))
+    setCreatePages(DEFAULT_ALLOWED_PAGES)
     setCreateBillboards({})
     setCreateError('')
     setShowCreateUser(true)
