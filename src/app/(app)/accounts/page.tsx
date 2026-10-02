@@ -5,10 +5,10 @@ import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Download, FileText, Lock, Plus, Pencil, Trash2, X, Check, DollarSign } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Download, FileText, Lock, Plus, Pencil, Trash2, X, Check, DollarSign, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { format, startOfMonth, addMonths, subMonths, parseISO, isSameMonth } from 'date-fns'
-import { accountMonths, isBillableMonth, effectivePaymentStatus, billableTotals, csvCell } from '@/lib/accounts-billing'
+import { accountMonths, isBillableMonth, effectivePaymentStatus, billableTotals, csvCell, invoiceNumberMatches } from '@/lib/accounts-billing'
 import type { Billboard, Booking, Client } from '@/types/database'
 import { useRole } from '@/lib/hooks/use-role'
 
@@ -46,6 +46,7 @@ export default function AccountsPage() {
   const [loading, setLoading] = useState(true)
   const [viewMonth, setViewMonth] = useState(startOfMonth(new Date()))
   const [selectedBb, setSelectedBb] = useState<string>('all')
+  const [invoiceFilter, setInvoiceFilter] = useState('')
   const [expandedBookings, setExpandedBookings] = useState<Set<string>>(new Set())
   const [invoiceInputKey, setInvoiceInputKey] = useState<string | null>(null) // "bookingId|monthKey"
   const invoiceInputRef = useRef<HTMLInputElement>(null)
@@ -295,6 +296,15 @@ export default function AccountsPage() {
     return { pending, sent, completed }
   }, [billboardSummaries, selectedBb, monthlyPayments, profitRecords, viewMonth])
 
+  const invoiceResults = useMemo(() => {
+    if (!invoiceFilter.trim()) return []
+    return monthlyPayments
+      .filter(payment => invoiceNumberMatches(payment.invoice_number, invoiceFilter))
+      .map(payment => ({ payment, booking: bookings.find(booking => booking.id === payment.booking_id) }))
+      .filter((result): result is { payment: MonthlyPayment; booking: BookingWithRefs } => Boolean(result.booking && result.booking.status !== 'cancelled'))
+      .sort((a, b) => a.payment.month.localeCompare(b.payment.month) || a.booking.billboard.name.localeCompare(b.booking.billboard.name))
+  }, [bookings, invoiceFilter, monthlyPayments])
+
   function getInvoiceNumber(bookingId: string, monthKey: string): string | undefined {
     return monthlyPayments.find(p => p.booking_id === bookingId && p.month === monthKey)?.invoice_number
   }
@@ -397,6 +407,84 @@ export default function AccountsPage() {
           </Card>
         )
       })()}
+
+      {/* Invoice number filter — searches all saved monthly payment records */}
+      <div className="space-y-2">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <Input
+            type="search"
+            inputMode="search"
+            aria-label="Filter by invoice number"
+            placeholder="Search invoice number, e.g. @1328"
+            value={invoiceFilter}
+            onChange={event => setInvoiceFilter(event.target.value)}
+            className="h-10 pl-9 pr-10"
+          />
+          {invoiceFilter && (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              aria-label="Clear invoice filter"
+              className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2"
+              onClick={() => setInvoiceFilter('')}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+
+        {invoiceFilter.trim() && (
+          <div className="border rounded-lg bg-white overflow-hidden">
+            <div className="flex items-center justify-between gap-2 border-b bg-gray-50 px-3 py-2">
+              <p className="text-xs font-semibold">Invoice matches</p>
+              <Badge variant="secondary" className="text-[10px]">{invoiceResults.length} {invoiceResults.length === 1 ? 'entry' : 'entries'}</Badge>
+            </div>
+            {invoiceResults.length === 0 ? (
+              <p className="px-3 py-4 text-center text-xs text-gray-500">No booking found for this invoice number.</p>
+            ) : (
+              <div className="divide-y">
+                {invoiceResults.map(({ payment, booking }) => {
+                  const status = getPaymentStatus(booking.id, payment.month)
+                  const display = PAYMENT_STATUS_DISPLAY[status]
+                  const locked = isProfitShareTriggered(booking.id, payment.month)
+                  return (
+                    <div key={payment.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <p className="text-xs font-semibold break-words">{booking.brand_name || booking.client?.company_name}</p>
+                          <span className="text-[10px] font-medium text-blue-700">{payment.invoice_number}</span>
+                        </div>
+                        <p className="text-[10px] text-gray-500">
+                          {booking.billboard.name} · {booking.client?.company_name} · {format(parseISO(`${payment.month}-01`), 'MMM yyyy')}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-bold">RM {payment.amount.toLocaleString()}</p>
+                        {canEdit ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className={`h-7 text-[10px] ${display.color} ${locked ? 'cursor-not-allowed opacity-70' : ''}`}
+                            onClick={() => cyclePaymentStatus(booking.id, payment.month, payment.amount, payment.invoice_number)}
+                            title={locked ? 'Locked because Profit Sharing has started' : 'Change payment status'}
+                          >
+                            {locked && <Lock className="mr-1 h-2.5 w-2.5" />}
+                            {display.icon} {display.label}
+                          </Button>
+                        ) : (
+                          <Badge variant="outline" className={`text-[10px] ${display.color}`}>{display.icon} {display.label}</Badge>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Month navigation */}
       <div className="flex items-center justify-between bg-white rounded-lg border p-2">

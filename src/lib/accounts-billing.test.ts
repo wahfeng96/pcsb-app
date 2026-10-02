@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { accountMonths, billingUncertainty, billableTotals, extraPayments, effectivePaymentStatus, csvCell, type AccountPayment } from './accounts-billing'
+import { accountMonths, billingUncertainty, billableTotals, extraPayments, effectivePaymentStatus, csvCell, invoiceNumberMatches, normalizeInvoiceNumber, type AccountPayment } from './accounts-billing'
 import { format } from 'date-fns'
 const booking = (total = 2000, start = '2026-04-21', rate = 2000) => ({ id: 'b', start_date: start, end_date: '2026-05-15', monthly_rate: rate, total_amount: total, payment_status: 'settled' })
 const keys = (b: ReturnType<typeof booking>) => accountMonths(b).map(m => format(m, 'yyyy-MM'))
@@ -41,5 +41,14 @@ describe('Accounts billable allocation', () => {
   it('CSV quotes commas and protects formula references', () => {
     expect(csvCell('@1345,1346')).toBe('"\'@1345,1346"')
     expect(csvCell('A "brand"')).toBe('"A ""brand"""')
+  })
+  it('matches invoice searches with or without @ and ignores spacing/case', () => {
+    expect(normalizeInvoiceNumber('  @@Ab 1328 ')).toBe('ab1328')
+    expect(invoiceNumberMatches('@1328', '1328')).toBe(true)
+    expect(invoiceNumberMatches('  @1328 ', '@1328')).toBe(true)
+    expect(invoiceNumberMatches('@1328-A', '1328')).toBe(true)
+    expect(invoiceNumberMatches('@1328', '')).toBe(false)
+    expect(invoiceNumberMatches(undefined, '1328')).toBe(false)
+    expect(invoiceNumberMatches('@1328', '1329')).toBe(false)
   })
 })

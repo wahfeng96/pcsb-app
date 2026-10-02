@@ -23,6 +23,13 @@ export function effectivePaymentStatus(id: string, month: string, payments: Acco
   if (pr?.status === 'waiting_profit_share' || pr?.status === 'settled') return 'completed'
   return payments.find(p => p.booking_id === id && p.month === month)?.status || 'pending_invoice'
 }
+export function normalizeInvoiceNumber(value: string | null | undefined): string {
+  return String(value || '').trim().toLowerCase().replace(/^@+/, '').replace(/\s+/g, '')
+}
+export function invoiceNumberMatches(invoiceNumber: string | null | undefined, query: string): boolean {
+  const normalizedQuery = normalizeInvoiceNumber(query)
+  return normalizedQuery.length > 0 && normalizeInvoiceNumber(invoiceNumber).includes(normalizedQuery)
+}
 export function billableTotals(bookings: BillingBooking[], payments: AccountPayment[], profits: AccountProfit[]) {
   let total = 0, completed = 0
   bookings.filter(b => b.status !== 'cancelled').forEach(b => accountMonths(b).forEach(m => {
