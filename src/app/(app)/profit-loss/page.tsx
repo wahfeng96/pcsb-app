@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { ChevronLeft, ChevronRight, GripVertical, Lock, LockOpen, Pencil, Plus, Tags, Trash2, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, GripVertical, Lock, LockOpen, Pencil, Plus, Search, Tags, Trash2, X } from 'lucide-react'
 import {
   allocationTotal,
   allocationsMatchTotal,
@@ -21,10 +21,12 @@ import {
   mytMonthKey,
   profitLossYears,
   revenueForPeriod,
+  searchRevenueForYear,
   UNKNOWN_REVENUE_MONTH,
   type CostCategory,
   type ProfitLossCost,
   type ProfitLossData,
+  type RevenueSearchField,
 } from '@/lib/profit-loss'
 
 const MONTHS = [
@@ -75,6 +77,8 @@ export default function ProfitLossPage() {
   const [year, setYear] = useState(currentYear)
   const [month, setMonth] = useState(currentMonth.slice(5, 7))
   const [billboardId, setBillboardId] = useState('all')
+  const [revenueSearch, setRevenueSearch] = useState('')
+  const [revenueSearchField, setRevenueSearchField] = useState<RevenueSearchField>('all')
   const [draggingRevenue, setDraggingRevenue] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [actionError, setActionError] = useState('')
@@ -105,6 +109,11 @@ export default function ProfitLossPage() {
   }, [currentYear, data.costs, data.revenue])
 
   const periodRevenue = useMemo(() => revenueForPeriod(data.revenue, year, month, billboardId), [billboardId, data.revenue, month, year])
+  const searchedRevenue = useMemo(
+    () => searchRevenueForYear(data.revenue, year, billboardId, revenueSearch, revenueSearchField),
+    [billboardId, data.revenue, revenueSearch, revenueSearchField, year],
+  )
+  const displayedRevenue = revenueSearch.trim() ? searchedRevenue : periodRevenue
   const periodCosts = useMemo(() => costsForPeriod(data.costs, year, month, billboardId), [billboardId, data.costs, month, year])
   const periodTotals = useMemo(() => calculateProfitLoss(periodRevenue, periodCosts), [periodCosts, periodRevenue])
   const yearRevenue = useMemo(() => revenueForPeriod(data.revenue, year, 'all', billboardId), [billboardId, data.revenue, year])
@@ -337,6 +346,28 @@ export default function ProfitLossPage() {
             <h2 className="text-sm font-semibold text-gray-900">Revenue reporting months</h2>
             <span className="text-[10px] text-gray-500">Drag paid rows or use Move to month</span>
           </div>
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_170px_auto]">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+              <Input
+                aria-label="Search revenue"
+                value={revenueSearch}
+                onChange={event => setRevenueSearch(event.target.value)}
+                placeholder="Search client, brand, invoice, month or billboard"
+                className="h-10 pl-9 pr-9"
+              />
+              {revenueSearch && <button type="button" aria-label="Clear revenue search" title="Clear search" onClick={() => setRevenueSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-500 hover:bg-gray-100"><X className="h-4 w-4" /></button>}
+            </div>
+            <select aria-label="Search revenue by" value={revenueSearchField} onChange={event => setRevenueSearchField(event.target.value as RevenueSearchField)} className="h-10 rounded-md border border-gray-300 bg-white px-3 text-sm">
+              <option value="all">All fields</option>
+              <option value="client">Client</option>
+              <option value="brand">Brand</option>
+              <option value="invoice">Invoice</option>
+              <option value="billing_month">Billing month</option>
+              <option value="billboard">Billboard</option>
+            </select>
+            {revenueSearch.trim() && <Badge variant="outline" className="h-10 justify-center whitespace-nowrap px-3">{searchedRevenue.length} result{searchedRevenue.length === 1 ? '' : 's'}</Badge>}
+          </div>
           <div className="flex gap-2 overflow-x-auto pb-1">
             {MONTHS.map(([monthValue, label]) => {
               const target = `${year}-${monthValue}`
@@ -368,13 +399,13 @@ export default function ProfitLossPage() {
 
       <section aria-labelledby="paid-revenue-heading" className="space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <h2 id="paid-revenue-heading" className="text-base font-semibold">Paid Revenue</h2>
-          <Badge className="bg-green-100 text-green-800">{periodRevenue.length} paid</Badge>
+          <h2 id="paid-revenue-heading" className="text-base font-semibold">{revenueSearch.trim() ? 'Revenue Search Results' : 'Paid Revenue'}</h2>
+          <Badge className="bg-green-100 text-green-800">{displayedRevenue.length} {revenueSearch.trim() ? 'found' : 'paid'}</Badge>
         </div>
         <div className="overflow-hidden rounded-lg border bg-white">
-          {periodRevenue.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-gray-500">{month === UNKNOWN_REVENUE_MONTH ? 'No received revenue is waiting for a reporting month.' : 'No completed payments in this reporting period.'}</p>
-          ) : periodRevenue.map(item => (
+          {displayedRevenue.length === 0 ? (
+            <p className="px-4 py-8 text-center text-sm text-gray-500">{revenueSearch.trim() ? 'No revenue matches this search.' : month === UNKNOWN_REVENUE_MONTH ? 'No received revenue is waiting for a reporting month.' : 'No completed payments in this reporting period.'}</p>
+          ) : displayedRevenue.map(item => (
             <div
               key={item.revenue_id}
               data-testid={`revenue-${item.revenue_id}`}

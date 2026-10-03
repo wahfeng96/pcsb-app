@@ -59,12 +59,19 @@ for (const mobile of [false, true]) {
 
     const initialMonth = await page.getByLabel('Month', { exact: true }).inputValue()
     const initialYear = await page.getByLabel('Year', { exact: true }).inputValue()
-    await page.getByRole('button', { name: /Unknown 1 received/ }).click()
+    await page.getByLabel('Search revenue by').selectOption('brand')
+    await page.getByLabel('Search revenue', { exact: true }).fill('Synthetic Client B')
+    await expect(page.getByText('No revenue matches this search.')).toBeVisible()
+    await page.getByLabel('Search revenue', { exact: true }).fill('Brand B')
+    await expect(page.getByText('1 result', { exact: true })).toBeVisible()
     await expect(page.getByText('Received · reporting month unknown')).toBeVisible()
     await expect(page.getByText(`Billing ${initialYear}-07`)).toBeVisible()
+    await expect(page.getByLabel('Month', { exact: true })).toHaveValue(initialMonth)
     await expect(page.getByLabel('Move Synthetic Client B to month').locator('option[value="unknown"]')).toHaveCount(1)
     await page.getByLabel('Move Synthetic Client B to month').selectOption(`${initialYear}-01`)
     await expect.poll(async () => page.evaluate(() => (window as unknown as { profitLossWrites: Array<{ name: string }> }).profitLossWrites.map(write => write.name))).toContain('assign_profit_loss_revenue')
+    await page.getByLabel('Clear revenue search').click()
+    await expect(page.getByLabel('Search revenue', { exact: true })).toHaveValue('')
     await page.getByLabel('Month', { exact: true }).selectOption(initialMonth)
 
     if (!mobile) {

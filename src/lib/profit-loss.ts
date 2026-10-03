@@ -20,6 +20,7 @@ export type ProfitLossData = {
   billboards: ProfitLossBillboard[]; revenue: PaidRevenue[]; categories: CostCategory[]; costs: ProfitLossCost[]; locks: string[]
 }
 export type ProfitLossTotals = { revenue: number; cost: number; net: number; margin: number | null }
+export type RevenueSearchField = 'all' | 'client' | 'brand' | 'invoice' | 'billing_month' | 'billboard'
 
 export function mytMonthKey(now = new Date()): string {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kuala_Lumpur', year: 'numeric', month: '2-digit' }).formatToParts(now)
@@ -61,6 +62,32 @@ export function revenueForPeriod(revenue: PaidRevenue[], year: number, month: st
       && Number(itemYear) === year
       && (month === 'all' || itemMonth === month)
       && (billboardId === 'all' || item.billboard_id === billboardId)
+  })
+}
+
+export function searchRevenueForYear(
+  revenue: PaidRevenue[],
+  year: number,
+  billboardId: string,
+  query: string,
+  field: RevenueSearchField,
+): PaidRevenue[] {
+  const search = query.trim().toLocaleLowerCase()
+  if (!search) return []
+
+  return revenue.filter(item => {
+    const itemYear = Number((item.reporting_month === UNKNOWN_REVENUE_MONTH ? item.billing_month : item.reporting_month).slice(0, 4))
+    if (itemYear !== year || (billboardId !== 'all' && item.billboard_id !== billboardId)) return false
+
+    const values: Record<RevenueSearchField, string[]> = {
+      all: [item.client_name, item.brand_name || '', item.invoice_number || '', item.billing_month, item.billboard_name, item.billboard_location, String(item.amount)],
+      client: [item.client_name],
+      brand: [item.brand_name || ''],
+      invoice: [item.invoice_number || ''],
+      billing_month: [item.billing_month],
+      billboard: [item.billboard_name, item.billboard_location],
+    }
+    return values[field].some(value => value.toLocaleLowerCase().includes(search))
   })
 }
 
