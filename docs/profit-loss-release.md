@@ -6,7 +6,7 @@ Migration `20261003043000_profit_loss_month_locks.sql` adds an owner-controlled 
 
 After applying the migration, run `supabase/audits/profit_loss_month_locks.sql`. Verify five protection triggers and three lock functions are present. Existing P&L records are not modified and no month starts locked.
 
-Payment completion and its initial P&L assignment remain one transaction. If the current MYT month is locked, completion is rejected with a specific instruction to unlock that month; revenue is never silently omitted or assigned to a different month.
+Payment completion no longer guesses the current reporting month. Completed rows without an assignment remain in Unknown; assigning them to a month is explicit and target-lock protected.
 
 A completed payment assigned to a locked month also cannot change away from `completed`, be deleted, or have its invoice/billing-month identity changed. P&L-visible booking fields cannot be changed or deleted while any completed revenue from that booking is in a locked month. Accounts surfaces database errors and stops before synchronizing Profit Sharing, booking, or commission status.
 
@@ -18,9 +18,11 @@ Target: canonical MAIN repository `/Users/canggih/Projects/pcsb-app`, Supabase p
 
 Revenue grain is a saved `monthly_payments` row, not an invoice number. A row is included only while its own status is exactly `completed`, and it contributes its saved payment amount to the one billboard referenced by its booking. The application already stores manually split multi-billboard work as separate bookings, so shared invoice numbers are labels only and are never expanded into a full invoice total per billboard.
 
-The migration trigger creates a reporting-month assignment only when a payment enters `completed`, using `Asia/Kuala_Lumpur` to choose the current month. Moving revenue updates only `profit_loss_revenue_assignments.reporting_month`; it never changes booking dates, invoice fields, payment fields, or payment status.
+Migration `20261003053000_profit_loss_unknown_revenue.sql` makes a settled booking (`bookings.payment_status = 'settled'`) the evidence that payment was received. For each billing month inferred by the existing `round(total_amount / monthly_rate)` rule, a month without completed, assigned revenue appears in Unknown. IDs use `unknown:<booking UUID>:<billing month>`, so unsaved rows remain stable across reloads. Unknown is excluded from calendar-month and full-year P&L totals until assigned.
 
-Existing completed payments receive no backfill or business-row mutation. The protected read function deterministically reports any existing completed payment without an assignment in October 2026, the feature introduction month. Its first manual move creates the persisted assignment. If a payment later leaves `completed`, it disappears from P&L without deleting its assignment; if it returns to completed, the prior reporting assignment remains.
+The owner-only `assign_profit_loss_revenue` RPC runs in one database transaction. It takes a transaction advisory lock for the booking/billing-month pair, then reassigns an existing completed row, completes a deterministic existing partial row while preserving its invoice number and billing month, or inserts only the missing monthly-payment row without inventing an invoice number. It then creates the reporting assignment. The target month must be unlocked; triggers also protect moves out of a locked source month. Repeated or concurrent calls are idempotent and cannot create a second row for the pair. Legacy duplicate assigned rows are collapsed deterministically in reads and exposed by the audit query.
+
+Existing business rows are not backfilled by the migration. The former completion trigger is removed, avoiding a transient current-month assignment and conflicts with locked current months. Single-month bookings such as Don Legacy (`a8a7252f-1c91-4426-8f76-ebd711b3635c`, RM2,000) therefore appear as one RM2,000 Unknown row when settled and missing a completed assignment; multi-month bookings expose only their missing billing months.
 
 Costs use their entered `cost_date`. Company totals count each cost once, including General / Company Overhead. A billboard view includes only allocation rows for that billboard and excludes General overhead. Database checks and deferred constraint triggers require positive, unique allocations whose sum exactly equals the cost total.
 
@@ -36,7 +38,7 @@ Invoice numbers link to the established Accounts invoice search route. A granted
 
 ## Migration
 
-Migration: `20261002090000_profit_loss.sql`.
+Base migration: `20261002090000_profit_loss.sql`. Unknown revenue migration: `20261003053000_profit_loss_unknown_revenue.sql`. Read-only audit: `supabase/audits/profit_loss_unknown_revenue.sql`.
 
 It creates three P&L cost tables, one revenue-assignment table, indexes, checks, RLS policies, protected RPC functions, status/updated-at triggers, and the profile access-field guard. It does not update, backfill, or delete production business rows.
 

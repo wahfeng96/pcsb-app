@@ -19,7 +19,9 @@ import {
   costsForPeriod,
   monthStart,
   mytMonthKey,
+  profitLossYears,
   revenueForPeriod,
+  UNKNOWN_REVENUE_MONTH,
   type CostCategory,
   type ProfitLossCost,
   type ProfitLossData,
@@ -73,7 +75,7 @@ export default function ProfitLossPage() {
   const [year, setYear] = useState(currentYear)
   const [month, setMonth] = useState(currentMonth.slice(5, 7))
   const [billboardId, setBillboardId] = useState('all')
-  const [draggingPayment, setDraggingPayment] = useState<string | null>(null)
+  const [draggingRevenue, setDraggingRevenue] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [actionError, setActionError] = useState('')
   const [costOpen, setCostOpen] = useState(false)
@@ -99,10 +101,7 @@ export default function ProfitLossPage() {
   useEffect(() => { load() }, [load])
 
   const years = useMemo(() => {
-    const values = new Set<number>([currentYear])
-    data.revenue.forEach(item => values.add(Number(item.reporting_month.slice(0, 4))))
-    data.costs.forEach(item => values.add(Number(item.cost_date.slice(0, 4))))
-    return [...values].filter(Number.isFinite).sort((a, b) => b - a)
+    return profitLossYears(data.revenue, data.costs, currentYear)
   }, [currentYear, data.costs, data.revenue])
 
   const periodRevenue = useMemo(() => revenueForPeriod(data.revenue, year, month, billboardId), [billboardId, data.revenue, month, year])
@@ -142,12 +141,15 @@ export default function ProfitLossPage() {
     setSaving(false)
   }
 
-  async function assignRevenue(paymentId: string, targetMonth: string) {
+  async function assignRevenue(revenueId: string, targetMonth: string) {
     if (!isOwner) return
+    const revenue = data.revenue.find(item => item.revenue_id === revenueId)
+    if (!revenue) return
     setSaving(true)
     setActionError('')
-    const { error } = await supabase.rpc('set_profit_loss_revenue_month', {
-      p_payment_id: paymentId,
+    const { data: paymentId, error } = await supabase.rpc('assign_profit_loss_revenue', {
+      p_booking_id: revenue.booking_id,
+      p_billing_month: revenue.billing_month,
       p_reporting_month: monthStart(targetMonth),
     })
     if (error) {
@@ -155,12 +157,12 @@ export default function ProfitLossPage() {
     } else {
       setData(current => ({
         ...current,
-        revenue: current.revenue.map(item => item.payment_id === paymentId
-          ? { ...item, reporting_month: targetMonth, has_persisted_assignment: true }
+        revenue: current.revenue.map(item => item.revenue_id === revenueId
+          ? { ...item, payment_id: String(paymentId || item.payment_id || ''), reporting_month: targetMonth, source: 'payment' as const, has_persisted_assignment: true }
           : item),
       }))
     }
-    setDraggingPayment(null)
+    setDraggingRevenue(null)
     setSaving(false)
   }
 
@@ -265,7 +267,7 @@ export default function ProfitLossPage() {
   if (loading) return <div className="flex h-64 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-b-2 border-red-600" /></div>
   if (loadError) return <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">{loadError}</div>
 
-  const selectedPeriod = month === 'all' ? `${year} full year` : `${MONTHS.find(item => item[0] === month)?.[1]} ${year}`
+  const selectedPeriod = month === 'all' ? `${year} full year` : month === UNKNOWN_REVENUE_MONTH ? `Unknown ${year}` : `${MONTHS.find(item => item[0] === month)?.[1]} ${year}`
   const selectedScope = billboardId === 'all' ? 'Company' : data.billboards.find(item => item.id === billboardId)?.name || 'Billboard'
   const profitState = periodTotals.net >= 0 ? 'Profit' : 'Loss'
 
@@ -299,6 +301,7 @@ export default function ProfitLossPage() {
           <select aria-label="Month" value={month} onChange={event => setMonth(event.target.value)} className="h-10 rounded-md border border-gray-300 bg-white px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-600">
             <option value="all">All months</option>
             {MONTHS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            <option value={UNKNOWN_REVENUE_MONTH}>Unknown</option>
           </select>
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1" aria-label="Billboard filter">
@@ -342,15 +345,23 @@ export default function ProfitLossPage() {
                 <div
                   key={target}
                   data-testid={`month-drop-${target}`}
-                  onDragOver={event => { if (draggingPayment && !locked) event.preventDefault() }}
-                  onDrop={event => { event.preventDefault(); if (draggingPayment && !locked) assignRevenue(draggingPayment, target) }}
-                  className={`min-w-[76px] rounded-md border px-2 py-2 text-center text-xs ${draggingPayment ? 'border-red-300 bg-red-50' : 'bg-white'} ${month === monthValue ? 'ring-1 ring-red-500' : ''}`}
+                  onDragOver={event => { if (draggingRevenue && !locked) event.preventDefault() }}
+                  onDrop={event => { event.preventDefault(); if (draggingRevenue && !locked) assignRevenue(draggingRevenue, target) }}
+                  className={`min-w-[76px] rounded-md border px-2 py-2 text-center text-xs ${draggingRevenue ? 'border-red-300 bg-red-50' : 'bg-white'} ${month === monthValue ? 'ring-1 ring-red-500' : ''}`}
                 >
                   <div className="flex items-center justify-center gap-1"><p className="font-medium">{label}</p><button type="button" disabled={saving} className="rounded p-0.5 text-gray-600 hover:bg-gray-100" aria-label={`${locked ? 'Unlock' : 'Lock'} ${label} ${year}`} title={`${locked ? 'Unlock' : 'Lock'} ${label} ${year}`} onClick={() => locked ? (setUnlockMonth(target), setUnlockCode(''), setActionError('')) : void lockMonth(target)}>{locked ? <Lock className="h-3.5 w-3.5" /> : <LockOpen className="h-3.5 w-3.5" />}</button></div>
                   <p className="text-[10px] text-gray-500">{revenueForPeriod(data.revenue, year, monthValue, billboardId).length} paid</p>
                 </div>
               )
             })}
+            <button
+              type="button"
+              onClick={() => setMonth(UNKNOWN_REVENUE_MONTH)}
+              className={`min-w-[88px] rounded-md border border-amber-300 bg-amber-50 px-2 py-2 text-center text-xs ${month === UNKNOWN_REVENUE_MONTH ? 'ring-1 ring-amber-600' : ''}`}
+            >
+              <span className="font-medium text-amber-900">Unknown</span>
+              <span className="block text-[10px] text-amber-700">{revenueForPeriod(data.revenue, year, UNKNOWN_REVENUE_MONTH, billboardId).length} received</span>
+            </button>
           </div>
         </section>
       )}
@@ -362,28 +373,30 @@ export default function ProfitLossPage() {
         </div>
         <div className="overflow-hidden rounded-lg border bg-white">
           {periodRevenue.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-gray-500">No completed payments in this reporting period.</p>
+            <p className="px-4 py-8 text-center text-sm text-gray-500">{month === UNKNOWN_REVENUE_MONTH ? 'No received revenue is waiting for a reporting month.' : 'No completed payments in this reporting period.'}</p>
           ) : periodRevenue.map(item => (
             <div
-              key={item.payment_id}
-              data-testid={`revenue-${item.payment_id}`}
+              key={item.revenue_id}
+              data-testid={`revenue-${item.revenue_id}`}
               draggable={isOwner && !saving && !data.locks.includes(item.reporting_month)}
-              onDragStart={event => { setDraggingPayment(item.payment_id); event.dataTransfer.setData('text/plain', item.payment_id) }}
-              onDragEnd={() => setDraggingPayment(null)}
+              onDragStart={event => { setDraggingRevenue(item.revenue_id); event.dataTransfer.setData('text/plain', item.revenue_id) }}
+              onDragEnd={() => setDraggingRevenue(null)}
               className="grid gap-2 border-b px-3 py-3 last:border-b-0 sm:grid-cols-[24px_minmax(110px,0.7fr)_minmax(180px,1.3fr)_minmax(170px,1fr)_120px_160px] sm:items-center"
             >
               <GripVertical className={`hidden h-4 w-4 sm:block ${isOwner ? 'text-gray-400' : 'text-gray-200'}`} aria-hidden="true" />
               <div>
                 {item.invoice_number ? <Link className="text-sm font-semibold text-blue-700 hover:underline" href={`/accounts?invoice=${encodeURIComponent(item.invoice_number)}`}>{item.invoice_number}</Link> : <span className="text-sm font-medium text-gray-500">No invoice number</span>}
-                {!item.has_persisted_assignment && <p className="text-[10px] text-amber-700">Existing paid · Oct 2026 fallback</p>}
+                <p className="text-[10px] text-gray-500">Billing {item.billing_month}</p>
+                {!item.has_persisted_assignment && <p className="text-[10px] text-amber-700">Received · reporting month unknown</p>}
               </div>
               <div className="min-w-0"><p className="truncate text-sm font-medium">{item.client_name}</p><p className="truncate text-xs text-gray-500">{item.brand_name || 'No brand'}</p></div>
               <div><p className="text-xs font-medium">{item.billboard_name}</p><p className="text-[10px] text-gray-500">{item.billboard_location}</p></div>
               <p className="text-sm font-bold text-green-700">{money(item.amount)}</p>
               {isOwner ? (
-                <select aria-label={`Move ${item.invoice_number || item.client_name} to month`} value={item.reporting_month} disabled={saving || data.locks.includes(item.reporting_month)} onChange={event => assignRevenue(item.payment_id, event.target.value)} className="h-8 rounded-md border bg-white px-2 text-xs">
+                <select aria-label={`Move ${item.invoice_number || item.client_name} to month`} value={item.reporting_month} disabled={saving || data.locks.includes(item.reporting_month)} onChange={event => assignRevenue(item.revenue_id, event.target.value)} className="h-8 rounded-md border bg-white px-2 text-xs">
+                  {item.reporting_month === UNKNOWN_REVENUE_MONTH && <option value={UNKNOWN_REVENUE_MONTH}>Unknown</option>}
                   {MONTHS.map(([monthValue, label]) => <option disabled={data.locks.includes(`${year}-${monthValue}`)} key={`${year}-${monthValue}`} value={`${year}-${monthValue}`}>{label} {year}{data.locks.includes(`${year}-${monthValue}`) ? ' (Locked)' : ''}</option>)}
-                  {!item.reporting_month.startsWith(String(year)) && <option value={item.reporting_month}>{item.reporting_month}</option>}
+                  {item.reporting_month !== UNKNOWN_REVENUE_MONTH && !item.reporting_month.startsWith(String(year)) && <option value={item.reporting_month}>{item.reporting_month}</option>}
                 </select>
               ) : <span className="text-xs text-gray-500">{item.reporting_month}</span>}
             </div>

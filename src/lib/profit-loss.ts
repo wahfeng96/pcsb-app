@@ -1,9 +1,11 @@
 export const PROFIT_LOSS_PATH = '/profit-loss'
 export const LEGACY_PAID_REVENUE_MONTH = '2026-10'
+export const UNKNOWN_REVENUE_MONTH = 'unknown'
 
 export type ProfitLossBillboard = { id: string; name: string; location: string }
 export type PaidRevenue = {
-  payment_id: string; booking_id: string; billing_month: string; reporting_month: string
+  revenue_id: string; payment_id: string | null; booking_id: string; billing_month: string; reporting_month: string
+  source: 'payment' | 'settled_booking'
   has_persisted_assignment: boolean; invoice_number: string | null; client_id: string
   client_name: string; brand_name: string | null; billboard_id: string; billboard_name: string
   billboard_location: string; amount: number
@@ -40,10 +42,25 @@ export function allocationsMatchTotal(total: number, allocations: Array<Pick<Cos
   return Number.isFinite(total) && total > 0 && Math.abs(allocationTotal(allocations) - total) < 0.005
 }
 
+export function profitLossYears(revenue: PaidRevenue[], costs: ProfitLossCost[], currentYear: number): number[] {
+  const values = new Set<number>([currentYear])
+  revenue.forEach(item => values.add(Number((item.reporting_month === UNKNOWN_REVENUE_MONTH ? item.billing_month : item.reporting_month).slice(0, 4))))
+  costs.forEach(item => values.add(Number(item.cost_date.slice(0, 4))))
+  return [...values].filter(Number.isFinite).sort((a, b) => b - a)
+}
+
 export function revenueForPeriod(revenue: PaidRevenue[], year: number, month: string, billboardId: string): PaidRevenue[] {
   return revenue.filter(item => {
+    if (month === UNKNOWN_REVENUE_MONTH) {
+      return item.reporting_month === UNKNOWN_REVENUE_MONTH
+        && Number(item.billing_month.slice(0, 4)) === year
+        && (billboardId === 'all' || item.billboard_id === billboardId)
+    }
     const [itemYear, itemMonth] = item.reporting_month.split('-')
-    return Number(itemYear) === year && (month === 'all' || itemMonth === month) && (billboardId === 'all' || item.billboard_id === billboardId)
+    return item.reporting_month !== UNKNOWN_REVENUE_MONTH
+      && Number(itemYear) === year
+      && (month === 'all' || itemMonth === month)
+      && (billboardId === 'all' || item.billboard_id === billboardId)
   })
 }
 

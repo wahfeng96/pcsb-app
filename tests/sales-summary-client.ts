@@ -6,13 +6,14 @@ export function createClient() {
       const writes = (window as unknown as { profitLossWrites?: Array<{ name: string; args?: Record<string, unknown> }> }).profitLossWrites
       if (name === 'get_profit_loss_data') return Promise.resolve({ data: fixture || null, error: null })
       writes?.push({ name, args })
-      if (name === 'set_profit_loss_revenue_month' && fixture && args) {
+      if (name === 'assign_profit_loss_revenue' && fixture && args) {
         const revenue = fixture.revenue as Array<Record<string, unknown>>
-        const row = revenue.find(item => item.payment_id === args.p_payment_id)
+        const row = revenue.find(item => item.booking_id === args.p_booking_id && item.billing_month === args.p_billing_month)
         if (row) {
           row.reporting_month = String(args.p_reporting_month).slice(0, 7)
           row.has_persisted_assignment = true
         }
+        return Promise.resolve({ data: row?.payment_id || 'materialized-payment', error: null })
       }
       return Promise.resolve({ data: null, error: null })
     },
