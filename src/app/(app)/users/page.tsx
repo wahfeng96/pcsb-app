@@ -29,6 +29,7 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState<string | null>(null)
   const [selectedBillboards, setSelectedBillboards] = useState<Record<string, 'view' | 'edit'>>({})
   const [selectedPages, setSelectedPages] = useState<string[]>([])
+  const [selectedCanEditProfitLoss, setSelectedCanEditProfitLoss] = useState(false)
   const [showCreateUser, setShowCreateUser] = useState(false)
   const [creatingUser, setCreatingUser] = useState(false)
   const [createError, setCreateError] = useState('')
@@ -63,11 +64,15 @@ export default function UsersPage() {
     })
     setSelectedBillboards(selected)
     setSelectedPages(user?.allowed_pages ?? DEFAULT_ALLOWED_PAGES)
+    setSelectedCanEditProfitLoss(user?.can_edit_profit_loss === true)
     setEditingUser(userId)
   }
 
   async function saveAccess(userId: string) {
-    const { error: pageError } = await supabase.from('profiles').update({ allowed_pages: selectedPages }).eq('id', userId)
+    const { error: pageError } = await supabase.from('profiles').update({
+      allowed_pages: selectedPages,
+      can_edit_profit_loss: selectedPages.includes('/profit-loss') && selectedCanEditProfitLoss,
+    }).eq('id', userId)
     if (pageError) {
       alert('Failed to save page access: ' + pageError.message)
       return
@@ -286,11 +291,13 @@ export default function UsersPage() {
                     ) : access.length === 0 ? (
                       <div className="space-y-1">
                         <p className="text-xs text-gray-500">Pages: {user.allowed_pages == null ? 'All pages' : `${user.allowed_pages.length} selected`}</p>
+                        {user.can_edit_profit_loss && <Badge className="text-[10px] bg-green-100 text-green-700">P&amp;L Editor</Badge>}
                         <span className="text-xs text-gray-400">No billboard access</span>
                       </div>
                     ) : (
                       <div className="space-y-1">
                         <p className="text-xs text-gray-500">Pages: {user.allowed_pages == null ? 'All pages' : `${user.allowed_pages.length} selected`}</p>
+                        {user.can_edit_profit_loss && <Badge className="text-[10px] bg-green-100 text-green-700">P&amp;L Editor</Badge>}
                         <div className="flex flex-wrap gap-1">
                           {access.map(a => {
                             const bb = billboards.find(b => b.id === a.billboard_id)
@@ -333,6 +340,17 @@ export default function UsersPage() {
                           )
                         })}
                       </div>
+                      {selectedPages.includes('/profit-loss') && (
+                        <label className="mt-2 flex items-center gap-2 text-xs text-gray-700">
+                          <input
+                            type="checkbox"
+                            checked={selectedCanEditProfitLoss}
+                            onChange={event => setSelectedCanEditProfitLoss(event.target.checked)}
+                            className="h-4 w-4 rounded border-gray-300 text-red-600"
+                          />
+                          Allow this user to edit P&amp;L
+                        </label>
+                      )}
                     </div>
                     <div>
                     <p className="text-xs text-gray-500 font-medium mb-1.5">Tap billboard to cycle access:</p>

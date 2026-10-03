@@ -24,6 +24,7 @@ export interface Profile {
   role: UserRole
   approved: boolean
   allowed_pages: string[] | null
+  can_edit_profit_loss: boolean
   created_at: string
 }
 

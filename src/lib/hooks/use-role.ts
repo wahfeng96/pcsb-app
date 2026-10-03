@@ -11,5 +11,10 @@ export function useRole() {
     isTeam: profile?.role === 'team',
     isPartner: profile?.role === 'partner',
     canEdit: profile?.role === 'owner',  // Only owner can edit
+    canEditProfitLoss: profile?.role === 'owner' || (
+      profile?.approved === true &&
+      profile?.can_edit_profit_loss === true &&
+      profile?.allowed_pages?.includes('/profit-loss') === true
+    ),
   }
 }

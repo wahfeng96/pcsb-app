@@ -69,7 +69,7 @@ function emptyCost(today: string, categoryId = ''): CostDraft {
 
 export default function ProfitLossPage() {
   const supabase = useMemo(() => createClient(), [])
-  const { isOwner } = useRole()
+  const { canEditProfitLoss } = useRole()
   const currentMonth = mytMonthKey()
   const currentYear = Number(currentMonth.slice(0, 4))
   const todayMYT = `${currentMonth}-${new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kuala_Lumpur', day: '2-digit' }).format(new Date())}`
@@ -133,7 +133,7 @@ export default function ProfitLossPage() {
   const draftHasLockedMonth = draftReportingMonths.some(reportingMonth => data.locks.includes(reportingMonth))
 
   async function lockMonth(monthKey: string) {
-    if (!isOwner || !window.confirm(`Lock ${monthKey}? Revenue placement and costs will become read-only.`)) return
+    if (!canEditProfitLoss || !window.confirm(`Lock ${monthKey}? Revenue placement and costs will become read-only.`)) return
     setSaving(true); setActionError('')
     const { error } = await supabase.rpc('lock_profit_loss_month', { p_reporting_month: monthStart(monthKey) })
     if (error) setActionError(error.message)
@@ -143,7 +143,7 @@ export default function ProfitLossPage() {
 
   async function unlockLockedMonth(event: React.FormEvent) {
     event.preventDefault()
-    if (!isOwner || !unlockMonth) return
+    if (!canEditProfitLoss || !unlockMonth) return
     setSaving(true); setActionError('')
     const { error } = await supabase.rpc('unlock_profit_loss_month', { p_reporting_month: monthStart(unlockMonth), p_unlock_code: unlockCode })
     if (error) setActionError(error.message)
@@ -156,7 +156,7 @@ export default function ProfitLossPage() {
   }
 
   async function assignRevenue(revenueId: string, targetMonth: string) {
-    if (!isOwner) return
+    if (!canEditProfitLoss) return
     const revenue = data.revenue.find(item => item.revenue_id === revenueId)
     if (!revenue) return
     setSaving(true)
@@ -252,7 +252,7 @@ export default function ProfitLossPage() {
 
   async function saveCost(event: React.FormEvent) {
     event.preventDefault()
-    if (!isOwner || !validAllocations || duplicateAllocations || !costDraft.category_id || draftReportingMonths.length === 0 || draftHasLockedMonth) return
+    if (!canEditProfitLoss || !validAllocations || duplicateAllocations || !costDraft.category_id || draftReportingMonths.length === 0 || draftHasLockedMonth) return
     setSaving(true)
     setActionError('')
     const { error } = await supabase.rpc('save_profit_loss_cost', {
@@ -276,7 +276,7 @@ export default function ProfitLossPage() {
   }
 
   async function deleteCost(costId: string) {
-    if (!isOwner || !window.confirm('Delete this cost? This cannot be undone.')) return
+    if (!canEditProfitLoss || !window.confirm('Delete this cost? This cannot be undone.')) return
     setSaving(true)
     setActionError('')
     const { error } = await supabase.rpc('delete_profit_loss_cost', { p_cost_id: costId })
@@ -287,7 +287,7 @@ export default function ProfitLossPage() {
 
   async function createCategory(event: React.FormEvent) {
     event.preventDefault()
-    if (!isOwner || !categoryName.trim()) return
+    if (!canEditProfitLoss || !categoryName.trim()) return
     setSaving(true)
     setActionError('')
     const { error } = await supabase.rpc('save_profit_loss_category', {
@@ -304,7 +304,7 @@ export default function ProfitLossPage() {
   }
 
   async function toggleCategory(category: CostCategory) {
-    if (!isOwner) return
+    if (!canEditProfitLoss) return
     setSaving(true)
     setActionError('')
     const { error } = await supabase.rpc('save_profit_loss_category', {
@@ -334,7 +334,7 @@ export default function ProfitLossPage() {
           <h1 className="text-2xl font-bold text-gray-900">Profit &amp; Loss</h1>
           <p className="text-xs text-gray-500">Paid revenue and entered costs · MYT reporting</p>
         </div>
-        {isOwner && (
+        {canEditProfitLoss && (
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={() => setCategoryOpen(true)}><Tags className="mr-1 h-4 w-4" /> Categories</Button>
             <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={openNewCost} disabled={selectedMonthLocked}><Plus className="mr-1 h-4 w-4" /> Add Cost</Button>
@@ -387,7 +387,7 @@ export default function ProfitLossPage() {
 
       <p className="text-xs text-gray-500"><span className="font-medium text-gray-700">{selectedScope}</span> · {selectedPeriod}. Billboard views include only direct allocations; General overhead appears only in All company.</p>
 
-      {isOwner && (
+      {canEditProfitLoss && (
         <section aria-label="Revenue reporting months" className="space-y-2">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-gray-900">Revenue reporting months</h2>
@@ -459,12 +459,12 @@ export default function ProfitLossPage() {
             <div
               key={item.revenue_id}
               data-testid={`revenue-${item.revenue_id}`}
-              draggable={isOwner && !saving && !data.locks.includes(item.reporting_month)}
+              draggable={canEditProfitLoss && !saving && !data.locks.includes(item.reporting_month)}
               onDragStart={event => { setDraggingRevenue(item.revenue_id); event.dataTransfer.setData('text/plain', item.revenue_id) }}
               onDragEnd={() => setDraggingRevenue(null)}
               className="grid gap-2 border-b px-3 py-3 last:border-b-0 sm:grid-cols-[24px_minmax(110px,0.7fr)_minmax(180px,1.3fr)_minmax(170px,1fr)_120px_160px] sm:items-center"
             >
-              <GripVertical className={`hidden h-4 w-4 sm:block ${isOwner ? 'text-gray-400' : 'text-gray-200'}`} aria-hidden="true" />
+              <GripVertical className={`hidden h-4 w-4 sm:block ${canEditProfitLoss ? 'text-gray-400' : 'text-gray-200'}`} aria-hidden="true" />
               <div>
                 {item.invoice_number ? <Link className="text-sm font-semibold text-blue-700 hover:underline" href={`/accounts?invoice=${encodeURIComponent(item.invoice_number)}`}>{item.invoice_number}</Link> : <span className="text-sm font-medium text-gray-500">No invoice number</span>}
                 <p className="text-[10px] text-gray-500">Billing {item.billing_month}</p>
@@ -473,7 +473,7 @@ export default function ProfitLossPage() {
               <div className="min-w-0"><p className="truncate text-sm font-medium">{item.client_name}</p><p className="truncate text-xs text-gray-500">{item.brand_name || 'No brand'}</p></div>
               <div><p className="text-xs font-medium">{item.billboard_name}</p><p className="text-[10px] text-gray-500">{item.billboard_location}</p></div>
               <p className="text-sm font-bold text-green-700">{money(item.amount)}</p>
-              {isOwner ? (
+              {canEditProfitLoss ? (
                 <select aria-label={`Move ${item.invoice_number || item.client_name} to month`} value={item.reporting_month} disabled={saving || data.locks.includes(item.reporting_month)} onChange={event => assignRevenue(item.revenue_id, event.target.value)} className="h-8 rounded-md border bg-white px-2 text-xs">
                   <option value={UNKNOWN_REVENUE_MONTH}>Unknown</option>
                   {MONTHS.map(([monthValue, label]) => <option disabled={data.locks.includes(`${year}-${monthValue}`)} key={`${year}-${monthValue}`} value={`${year}-${monthValue}`}>{label} {year}{data.locks.includes(`${year}-${monthValue}`) ? ' (Locked)' : ''}</option>)}
@@ -495,7 +495,7 @@ export default function ProfitLossPage() {
               <div className="min-w-0"><p className="truncate text-sm font-medium">{cost.description}</p><p className="truncate text-xs text-gray-500">{cost.remarks || 'No remarks'}</p></div>
               <p className="text-xs">{cost.supplier_payee}</p>
               <div><p className="text-sm font-bold">{money(cost.reporting_amount)}</p>{billboardId !== 'all' && Number(cost.reporting_amount) !== Number(cost.amount) && <p className="text-[10px] text-gray-500">of {money(cost.amount)}</p>}</div>
-              {isOwner && <div className="flex justify-end gap-1"><Button size="icon" variant="ghost" disabled={(cost.reporting_months || [cost.cost_date.slice(0, 7)]).some(value => data.locks.includes(value))} aria-label={`Edit ${cost.description}`} onClick={() => openEditCost(cost)}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" disabled={(cost.reporting_months || [cost.cost_date.slice(0, 7)]).some(value => data.locks.includes(value))} aria-label={`Delete ${cost.description}`} onClick={() => deleteCost(cost.id)}><Trash2 className="h-4 w-4 text-red-600" /></Button></div>}
+              {canEditProfitLoss && <div className="flex justify-end gap-1"><Button size="icon" variant="ghost" disabled={(cost.reporting_months || [cost.cost_date.slice(0, 7)]).some(value => data.locks.includes(value))} aria-label={`Edit ${cost.description}`} onClick={() => openEditCost(cost)}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" disabled={(cost.reporting_months || [cost.cost_date.slice(0, 7)]).some(value => data.locks.includes(value))} aria-label={`Delete ${cost.description}`} onClick={() => deleteCost(cost.id)}><Trash2 className="h-4 w-4 text-red-600" /></Button></div>}
             </div>
           ))}
         </div>
