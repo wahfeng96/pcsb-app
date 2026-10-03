@@ -9,7 +9,7 @@ const revenue = (overrides: Partial<PaidRevenue> = {}): PaidRevenue => ({
 })
 const cost = (overrides: Partial<ProfitLossCost> = {}): ProfitLossCost => ({
   id: 'cost-1', cost_date: '2026-10-02', category_id: 'category-1', category_name: 'Power',
-  description: 'Electricity', supplier_payee: 'SESB', amount: 600, remarks: null,
+  description: 'Electricity', supplier_payee: 'SESB', amount: 600, remarks: null, reporting_months: ['2026-10'],
   allocations: [
     { id: 'allocation-a', billboard_id: 'billboard-a', billboard_name: 'Screen A', amount: 400 },
     { id: 'allocation-general', billboard_id: null, billboard_name: 'General / Company Overhead', amount: 200 },
@@ -31,7 +31,7 @@ describe('P&L calculations and filters', () => {
     ]
     expect(revenueForPeriod(rows, 2026, 'all', 'all').map(item => item.revenue_id)).toEqual(['payment:payment-1'])
     expect(revenueForPeriod(rows, 2026, UNKNOWN_REVENUE_MONTH, 'all').map(item => item.revenue_id)).toEqual(['unknown:booking-2:2026-07'])
-    expect(profitLossYears(rows, [cost({ cost_date: '2024-01-02' })], 2026)).toEqual([2026, 2025, 2024])
+    expect(profitLossYears(rows, [cost({ cost_date: '2024-01-02', reporting_months: ['2024-01'] })], 2026)).toEqual([2026, 2025, 2024])
   })
   it('searches assigned and Unknown revenue across the selected year and billboard', () => {
     const rows = [
@@ -51,6 +51,14 @@ describe('P&L calculations and filters', () => {
     expect(costsForPeriod(rows, 2026, '10', 'billboard-a')[0].reporting_amount).toBe(400)
     expect(costsForPeriod(rows, 2026, '10', 'billboard-b')).toEqual([])
     expect(calculateProfitLoss([revenue()], costsForPeriod(rows, 2026, '10', 'all'))).toEqual({ revenue: 1000, cost: 600, net: 400, margin: 40 })
+  })
+  it('splits one cost evenly across selected reporting months without inflating the annual total', () => {
+    const rows = [cost({ reporting_months: ['2026-01', '2026-02', '2026-03'] })]
+    expect(costsForPeriod(rows, 2026, '01', 'all')[0].reporting_amount).toBe(200)
+    expect(costsForPeriod(rows, 2026, '02', 'billboard-a')[0].reporting_amount).toBeCloseTo(400 / 3)
+    expect(costsForPeriod(rows, 2026, '04', 'all')).toEqual([])
+    expect(costsForPeriod(rows, 2026, 'all', 'all')[0].reporting_amount).toBe(600)
+    expect(costsForPeriod(rows, 2026, 'all', 'billboard-a')[0].reporting_amount).toBe(400)
   })
   it('validates exact split totals and avoids misleading zero-revenue margins', () => {
     expect(allocationsMatchTotal(100, [{ amount: 60 }, { amount: 40 }])).toBe(true)

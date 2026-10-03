@@ -28,7 +28,7 @@ function fixtureScript(owner: boolean) {
         { id: 'cat-old', name: 'Legacy Rental', is_active: false },
       ],
       costs: [
-        { id: 'cost-a', cost_date: `${monthKey}-02`, category_id: 'cat-power', category_name: 'Power', description: 'Synthetic electricity', supplier_payee: 'Synthetic Supplier', amount: 600, remarks: 'Synthetic only', allocations: [
+        { id: 'cost-a', cost_date: `${monthKey}-02`, reporting_months: [monthKey], category_id: 'cat-power', category_name: 'Power', description: 'Synthetic electricity', supplier_payee: 'Synthetic Supplier', amount: 600, remarks: 'Synthetic only', allocations: [
           { id: 'alloc-a', billboard_id: 'bb-a', billboard_name: 'Likas', amount: 400 },
           { id: 'alloc-general', billboard_id: null, billboard_name: 'General / Company Overhead', amount: 200 },
         ] },
@@ -96,8 +96,15 @@ for (const mobile of [false, true]) {
     await page.getByLabel('Allocation 2 destination').selectOption('bb-b')
     await page.getByLabel('Allocation 2 amount').fill('40')
     await expect(page.getByText('Balanced')).toBeVisible()
+    await page.getByRole('checkbox', { name: 'Jan' }).check()
+    await page.getByRole('checkbox', { name: 'Feb' }).check()
+    await expect(page.getByText('Split equally across 3 months')).toBeVisible()
+    const monthPickerOutput = `/Users/canggih/.openclaw/workspace/main/output/pcsb-pl-page-20261002/cost-months-${mobile ? 'mobile' : 'desktop'}.png`
+    await page.screenshot({ path: monthPickerOutput, fullPage: true })
     await page.getByRole('button', { name: 'Save Cost' }).click()
     await expect.poll(async () => page.evaluate(() => (window as unknown as { profitLossWrites: Array<{ name: string }> }).profitLossWrites.map(write => write.name))).toContain('save_profit_loss_cost')
+    const costWrite = await page.evaluate(() => (window as unknown as { profitLossWrites: Array<{ name: string; args: Record<string, unknown> }> }).profitLossWrites.find(write => write.name === 'save_profit_loss_cost'))
+    expect(costWrite?.args.p_reporting_months).toEqual(['2026-01-01', '2026-02-01', '2026-10-01'])
 
     const output = `/Users/canggih/.openclaw/workspace/main/output/pcsb-pl-page-20261002/profit-loss-${mobile ? 'mobile' : 'desktop'}.png`
     await page.screenshot({ path: output, fullPage: true })

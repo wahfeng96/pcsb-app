@@ -14,7 +14,7 @@ export type CostCategory = { id: string; name: string; is_active: boolean }
 export type CostAllocation = { id: string; billboard_id: string | null; billboard_name: string; amount: number }
 export type ProfitLossCost = {
   id: string; cost_date: string; category_id: string; category_name: string; description: string
-  supplier_payee: string; amount: number; remarks: string | null; allocations: CostAllocation[]
+  supplier_payee: string; amount: number; remarks: string | null; reporting_months: string[]; allocations: CostAllocation[]
 }
 export type ProfitLossData = {
   billboards: ProfitLossBillboard[]; revenue: PaidRevenue[]; categories: CostCategory[]; costs: ProfitLossCost[]; locks: string[]
@@ -46,7 +46,7 @@ export function allocationsMatchTotal(total: number, allocations: Array<Pick<Cos
 export function profitLossYears(revenue: PaidRevenue[], costs: ProfitLossCost[], currentYear: number): number[] {
   const values = new Set<number>([currentYear])
   revenue.forEach(item => values.add(Number((item.reporting_month === UNKNOWN_REVENUE_MONTH ? item.billing_month : item.reporting_month).slice(0, 4))))
-  costs.forEach(item => values.add(Number(item.cost_date.slice(0, 4))))
+  costs.forEach(item => (item.reporting_months?.length ? item.reporting_months : [item.cost_date.slice(0, 7)]).forEach(reportingMonth => values.add(Number(reportingMonth.slice(0, 4)))))
   return [...values].filter(Number.isFinite).sort((a, b) => b - a)
 }
 
@@ -93,10 +93,12 @@ export function searchRevenueForYear(
 
 export function costsForPeriod(costs: ProfitLossCost[], year: number, month: string, billboardId: string): Array<ProfitLossCost & { reporting_amount: number }> {
   return costs.flatMap(cost => {
-    const [costYear, costMonth] = cost.cost_date.split('-')
-    if (Number(costYear) !== year || (month !== 'all' && costMonth !== month)) return []
-    if (billboardId === 'all') return [{ ...cost, reporting_amount: Number(cost.amount) }]
-    const reportingAmount = cost.allocations.filter(allocation => allocation.billboard_id === billboardId).reduce((sum, allocation) => sum + Number(allocation.amount), 0)
+    const reportingMonths = cost.reporting_months?.length ? cost.reporting_months : [cost.cost_date.slice(0, 7)]
+    const monthsInYear = reportingMonths.filter(reportingMonth => Number(reportingMonth.slice(0, 4)) === year)
+    if (monthsInYear.length === 0 || (month !== 'all' && !monthsInYear.includes(`${year}-${month}`))) return []
+    const periodShare = month === 'all' ? monthsInYear.length / reportingMonths.length : 1 / reportingMonths.length
+    if (billboardId === 'all') return [{ ...cost, reporting_amount: Number(cost.amount) * periodShare }]
+    const reportingAmount = cost.allocations.filter(allocation => allocation.billboard_id === billboardId).reduce((sum, allocation) => sum + Number(allocation.amount), 0) * periodShare
     return reportingAmount > 0 ? [{ ...cost, reporting_amount: reportingAmount }] : []
   })
 }
