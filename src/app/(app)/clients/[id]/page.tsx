@@ -138,7 +138,7 @@ export default function ClientDetailPage() {
     }
     const bookingData = bookingDataWithCommission
 
-    // Sync profit_sharing records for each revenue month
+    // Rebuild the booking-derived schedule while preserving workflow status for retained months.
     const paymentToProfit: Record<PaymentStatus, string> = {
       pending_payment: 'pending_payment',
       received_pending_profit_share: 'waiting_profit_share',
@@ -146,6 +146,8 @@ export default function ClientDetailPage() {
     }
     const profitStatus = paymentToProfit[bookingData.payment_status]
     const months = getRevenueMonths(parseISO(bookingData.start_date), bookingData.monthly_rate, bookingData.total_amount)
+    const { data: existingProfitRecords } = await supabase.from('profit_sharing').select('month, status').eq('booking_id', bookingId)
+    const existingProfitStatusByMonth = new Map((existingProfitRecords || []).map(record => [record.month, record.status]))
     await supabase.from('profit_sharing').delete().eq('booking_id', bookingId)
     if (months.length > 0) {
       await supabase.from('profit_sharing').insert(
@@ -153,7 +155,7 @@ export default function ClientDetailPage() {
           booking_id: bookingId,
           month: format(m, 'yyyy-MM'),
           amount: bookingData.monthly_rate,
-          status: profitStatus,
+          status: existingProfitStatusByMonth.get(format(m, 'yyyy-MM')) || profitStatus,
           billboard_id: bookingData.billboard_id,
           sales_person: bookingData.sales_person || null,
         }))

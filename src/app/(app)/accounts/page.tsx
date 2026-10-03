@@ -375,7 +375,7 @@ export default function AccountsPage() {
                   <div key={p.id} className="flex items-center justify-between bg-white rounded px-2 py-1.5 border border-blue-200">
                     <div>
                       <p className="text-xs font-medium">{clientName}</p>
-                      <p className="text-[10px] text-gray-500">{p.month} · RM {p.amount.toLocaleString()}</p>
+                      <p className="text-[10px] text-gray-500">{p.month} · RM {(booking?.monthly_rate || 0).toLocaleString()}</p>
                     </div>
                     {!canEdit ? <span className="text-xs">Missing invoice number</span> : invoiceInputKey === key ? (
                       <div className="flex items-center gap-1">
@@ -467,13 +467,13 @@ export default function AccountsPage() {
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <p className="text-xs font-bold">RM {payment.amount.toLocaleString()}</p>
+                        <p className="text-xs font-bold">RM {(booking.monthly_rate || 0).toLocaleString()}</p>
                         {canEdit ? (
                           <Button
                             size="sm"
                             variant="outline"
                             className={`h-7 text-[10px] ${display.color} ${locked ? 'cursor-not-allowed opacity-70' : ''}`}
-                            onClick={() => cyclePaymentStatus(booking.id, payment.month, payment.amount, payment.invoice_number)}
+                            onClick={() => cyclePaymentStatus(booking.id, payment.month, booking.monthly_rate || 0, payment.invoice_number)}
                             title={locked ? 'Locked because Profit Sharing has started' : 'Change payment status'}
                           >
                             {locked && <Lock className="mr-1 h-2.5 w-2.5" />}
