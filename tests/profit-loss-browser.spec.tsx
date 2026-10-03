@@ -75,14 +75,11 @@ for (const mobile of [false, true]) {
     await page.getByLabel('Month', { exact: true }).selectOption(initialMonth)
 
     if (!mobile) {
-      const currentMonth = await page.getByLabel('Month', { exact: true }).inputValue()
-      const year = await page.getByLabel('Year', { exact: true }).inputValue()
-      const nextMonth = currentMonth === '12' ? '11' : String(Number(currentMonth) + 1).padStart(2, '0')
-      await page.getByTestId('revenue-payment:paid-a').dragTo(page.getByTestId(`month-drop-${year}-${nextMonth}`))
-      await expect.poll(async () => page.evaluate(() => (window as unknown as { profitLossWrites: Array<{ name: string }> }).profitLossWrites.map(write => write.name))).toContain('assign_profit_loss_revenue')
+      await page.getByTestId('revenue-payment:paid-a').dragTo(page.getByTestId('month-drop-unknown'))
+      await expect.poll(async () => page.evaluate(() => (window as unknown as { profitLossWrites: Array<{ name: string }> }).profitLossWrites.map(write => write.name))).toContain('unassign_profit_loss_revenue')
     } else {
-      await page.getByLabel('Move @1400 to month').selectOption({ index: 1 })
-      await expect.poll(async () => page.evaluate(() => (window as unknown as { profitLossWrites: Array<{ name: string }> }).profitLossWrites.map(write => write.name))).toContain('assign_profit_loss_revenue')
+      await page.getByLabel('Move @1400 to month').selectOption('unknown')
+      await expect.poll(async () => page.evaluate(() => (window as unknown as { profitLossWrites: Array<{ name: string }> }).profitLossWrites.map(write => write.name))).toContain('unassign_profit_loss_revenue')
     }
 
     await page.getByRole('button', { name: 'Add Cost' }).click()

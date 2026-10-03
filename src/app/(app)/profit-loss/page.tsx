@@ -156,6 +156,22 @@ export default function ProfitLossPage() {
     if (!revenue) return
     setSaving(true)
     setActionError('')
+
+    if (targetMonth === UNKNOWN_REVENUE_MONTH) {
+      if (!revenue.payment_id) {
+        setActionError('This revenue is already Unknown.')
+        setDraggingRevenue(null)
+        setSaving(false)
+        return
+      }
+      const { error } = await supabase.rpc('unassign_profit_loss_revenue', { p_payment_id: revenue.payment_id })
+      if (error) setActionError(error.message)
+      else await load()
+      setDraggingRevenue(null)
+      setSaving(false)
+      return
+    }
+
     const { data: paymentId, error } = await supabase.rpc('assign_profit_loss_revenue', {
       p_booking_id: revenue.booking_id,
       p_billing_month: revenue.billing_month,
@@ -387,8 +403,11 @@ export default function ProfitLossPage() {
             })}
             <button
               type="button"
+              data-testid="month-drop-unknown"
+              onDragOver={event => { if (draggingRevenue) event.preventDefault() }}
+              onDrop={event => { event.preventDefault(); if (draggingRevenue) assignRevenue(draggingRevenue, UNKNOWN_REVENUE_MONTH) }}
               onClick={() => setMonth(UNKNOWN_REVENUE_MONTH)}
-              className={`min-w-[88px] rounded-md border border-amber-300 bg-amber-50 px-2 py-2 text-center text-xs ${month === UNKNOWN_REVENUE_MONTH ? 'ring-1 ring-amber-600' : ''}`}
+              className={`min-w-[88px] rounded-md border border-amber-300 px-2 py-2 text-center text-xs ${draggingRevenue ? 'bg-amber-100 ring-1 ring-amber-500' : 'bg-amber-50'} ${month === UNKNOWN_REVENUE_MONTH ? 'ring-1 ring-amber-600' : ''}`}
             >
               <span className="font-medium text-amber-900">Unknown</span>
               <span className="block text-[10px] text-amber-700">{revenueForPeriod(data.revenue, year, UNKNOWN_REVENUE_MONTH, billboardId).length} received</span>
@@ -425,7 +444,7 @@ export default function ProfitLossPage() {
               <p className="text-sm font-bold text-green-700">{money(item.amount)}</p>
               {isOwner ? (
                 <select aria-label={`Move ${item.invoice_number || item.client_name} to month`} value={item.reporting_month} disabled={saving || data.locks.includes(item.reporting_month)} onChange={event => assignRevenue(item.revenue_id, event.target.value)} className="h-8 rounded-md border bg-white px-2 text-xs">
-                  {item.reporting_month === UNKNOWN_REVENUE_MONTH && <option value={UNKNOWN_REVENUE_MONTH}>Unknown</option>}
+                  <option value={UNKNOWN_REVENUE_MONTH}>Unknown</option>
                   {MONTHS.map(([monthValue, label]) => <option disabled={data.locks.includes(`${year}-${monthValue}`)} key={`${year}-${monthValue}`} value={`${year}-${monthValue}`}>{label} {year}{data.locks.includes(`${year}-${monthValue}`) ? ' (Locked)' : ''}</option>)}
                   {item.reporting_month !== UNKNOWN_REVENUE_MONTH && !item.reporting_month.startsWith(String(year)) && <option value={item.reporting_month}>{item.reporting_month}</option>}
                 </select>
