@@ -1,5 +1,17 @@
 # MAIN PCSB Profit & Loss release
 
+## Monthly close lock
+
+Migration `20261003043000_profit_loss_month_locks.sql` adds an owner-controlled lock for each reporting month. A locked month remains readable but rejects revenue moves into or out of it, cost creates/updates/deletes dated in it, and allocation changes for its costs. Unlocking is owner-only and validates the supplied code against a one-way SHA-256 digest in the database function; the code is not included in the browser bundle or stored as plaintext.
+
+After applying the migration, run `supabase/audits/profit_loss_month_locks.sql`. Verify five protection triggers and three lock functions are present. Existing P&L records are not modified and no month starts locked.
+
+Payment completion and its initial P&L assignment remain one transaction. If the current MYT month is locked, completion is rejected with a specific instruction to unlock that month; revenue is never silently omitted or assigned to a different month.
+
+A completed payment assigned to a locked month also cannot change away from `completed`, be deleted, or have its invoice/billing-month identity changed. P&L-visible booking fields cannot be changed or deleted while any completed revenue from that booking is in a locked month. Accounts surfaces database errors and stops before synchronizing Profit Sharing, booking, or commission status.
+
+Bookings with completed revenue in a locked month cannot be deleted or change `monthly_rate`, `status`, `client_id`, `billboard_id`, or `brand_name`, because those live booking values are included in the protected P&L report. Unrelated booking metadata remains editable.
+
 Target: canonical MAIN repository `/Users/canggih/Projects/pcsb-app`, Supabase project `sqryqwlevsgklctkxwok`, and the existing Render service. Do not use this migration in DMDC or PLC. Render deployment is intentionally excluded from this release step.
 
 ## Accounting semantics

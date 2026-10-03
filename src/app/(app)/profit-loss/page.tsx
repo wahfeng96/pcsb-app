@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { ChevronLeft, ChevronRight, GripVertical, Pencil, Plus, Tags, Trash2, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, GripVertical, Lock, LockOpen, Pencil, Plus, Tags, Trash2, X } from 'lucide-react'
 import {
   allocationTotal,
   allocationsMatchTotal,
@@ -42,7 +42,7 @@ type CostDraft = {
   allocations: AllocationDraft[]
 }
 
-const EMPTY_DATA: ProfitLossData = { billboards: [], revenue: [], categories: [], costs: [] }
+const EMPTY_DATA: ProfitLossData = { billboards: [], revenue: [], categories: [], costs: [], locks: [] }
 
 function money(value: number) {
   return `RM ${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -80,6 +80,8 @@ export default function ProfitLossPage() {
   const [categoryOpen, setCategoryOpen] = useState(false)
   const [costDraft, setCostDraft] = useState<CostDraft>(emptyCost(todayMYT))
   const [categoryName, setCategoryName] = useState('')
+  const [unlockMonth, setUnlockMonth] = useState<string | null>(null)
+  const [unlockCode, setUnlockCode] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -88,7 +90,8 @@ export default function ProfitLossPage() {
     if (error || !result) {
       setLoadError(error?.message || 'Unable to load P&L data.')
     } else {
-      setData(result as ProfitLossData)
+      const loaded = result as ProfitLossData
+      setData({ ...loaded, locks: loaded.locks || [] })
     }
     setLoading(false)
   }, [supabase])
@@ -113,6 +116,31 @@ export default function ProfitLossPage() {
   const draftAmount = Number(costDraft.amount)
   const validAllocations = allocationsMatchTotal(draftAmount, costDraft.allocations.map(item => ({ amount: Number(item.amount) || 0 })))
   const duplicateAllocations = new Set(costDraft.allocations.map(item => item.billboard_id)).size !== costDraft.allocations.length
+  const selectedMonthKey = month === 'all' ? null : `${year}-${month}`
+  const selectedMonthLocked = selectedMonthKey ? data.locks.includes(selectedMonthKey) : false
+
+  async function lockMonth(monthKey: string) {
+    if (!isOwner || !window.confirm(`Lock ${monthKey}? Revenue placement and costs will become read-only.`)) return
+    setSaving(true); setActionError('')
+    const { error } = await supabase.rpc('lock_profit_loss_month', { p_reporting_month: monthStart(monthKey) })
+    if (error) setActionError(error.message)
+    else setData(current => ({ ...current, locks: [...new Set([...current.locks, monthKey])].sort() }))
+    setSaving(false)
+  }
+
+  async function unlockLockedMonth(event: React.FormEvent) {
+    event.preventDefault()
+    if (!isOwner || !unlockMonth) return
+    setSaving(true); setActionError('')
+    const { error } = await supabase.rpc('unlock_profit_loss_month', { p_reporting_month: monthStart(unlockMonth), p_unlock_code: unlockCode })
+    if (error) setActionError(error.message)
+    else {
+      setData(current => ({ ...current, locks: current.locks.filter(value => value !== unlockMonth) }))
+      setUnlockMonth(null)
+      setUnlockCode('')
+    }
+    setSaving(false)
+  }
 
   async function assignRevenue(paymentId: string, targetMonth: string) {
     if (!isOwner) return
@@ -137,6 +165,7 @@ export default function ProfitLossPage() {
   }
 
   function openNewCost() {
+    if (selectedMonthLocked) return
     setCostDraft(emptyCost(todayMYT, activeCategories[0]?.id || ''))
     setActionError('')
     setCostOpen(true)
@@ -250,7 +279,7 @@ export default function ProfitLossPage() {
         {isOwner && (
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={() => setCategoryOpen(true)}><Tags className="mr-1 h-4 w-4" /> Categories</Button>
-            <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={openNewCost}><Plus className="mr-1 h-4 w-4" /> Add Cost</Button>
+            <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={openNewCost} disabled={selectedMonthLocked}><Plus className="mr-1 h-4 w-4" /> Add Cost</Button>
           </div>
         )}
       </div>
@@ -308,15 +337,16 @@ export default function ProfitLossPage() {
           <div className="flex gap-2 overflow-x-auto pb-1">
             {MONTHS.map(([monthValue, label]) => {
               const target = `${year}-${monthValue}`
+              const locked = data.locks.includes(target)
               return (
                 <div
                   key={target}
                   data-testid={`month-drop-${target}`}
-                  onDragOver={event => { if (draggingPayment) event.preventDefault() }}
-                  onDrop={event => { event.preventDefault(); if (draggingPayment) assignRevenue(draggingPayment, target) }}
+                  onDragOver={event => { if (draggingPayment && !locked) event.preventDefault() }}
+                  onDrop={event => { event.preventDefault(); if (draggingPayment && !locked) assignRevenue(draggingPayment, target) }}
                   className={`min-w-[76px] rounded-md border px-2 py-2 text-center text-xs ${draggingPayment ? 'border-red-300 bg-red-50' : 'bg-white'} ${month === monthValue ? 'ring-1 ring-red-500' : ''}`}
                 >
-                  <p className="font-medium">{label}</p>
+                  <div className="flex items-center justify-center gap-1"><p className="font-medium">{label}</p><button type="button" disabled={saving} className="rounded p-0.5 text-gray-600 hover:bg-gray-100" aria-label={`${locked ? 'Unlock' : 'Lock'} ${label} ${year}`} title={`${locked ? 'Unlock' : 'Lock'} ${label} ${year}`} onClick={() => locked ? (setUnlockMonth(target), setUnlockCode(''), setActionError('')) : void lockMonth(target)}>{locked ? <Lock className="h-3.5 w-3.5" /> : <LockOpen className="h-3.5 w-3.5" />}</button></div>
                   <p className="text-[10px] text-gray-500">{revenueForPeriod(data.revenue, year, monthValue, billboardId).length} paid</p>
                 </div>
               )
@@ -337,7 +367,7 @@ export default function ProfitLossPage() {
             <div
               key={item.payment_id}
               data-testid={`revenue-${item.payment_id}`}
-              draggable={isOwner && !saving}
+              draggable={isOwner && !saving && !data.locks.includes(item.reporting_month)}
               onDragStart={event => { setDraggingPayment(item.payment_id); event.dataTransfer.setData('text/plain', item.payment_id) }}
               onDragEnd={() => setDraggingPayment(null)}
               className="grid gap-2 border-b px-3 py-3 last:border-b-0 sm:grid-cols-[24px_minmax(110px,0.7fr)_minmax(180px,1.3fr)_minmax(170px,1fr)_120px_160px] sm:items-center"
@@ -351,8 +381,8 @@ export default function ProfitLossPage() {
               <div><p className="text-xs font-medium">{item.billboard_name}</p><p className="text-[10px] text-gray-500">{item.billboard_location}</p></div>
               <p className="text-sm font-bold text-green-700">{money(item.amount)}</p>
               {isOwner ? (
-                <select aria-label={`Move ${item.invoice_number || item.client_name} to month`} value={item.reporting_month} disabled={saving} onChange={event => assignRevenue(item.payment_id, event.target.value)} className="h-8 rounded-md border bg-white px-2 text-xs">
-                  {MONTHS.map(([monthValue, label]) => <option key={`${year}-${monthValue}`} value={`${year}-${monthValue}`}>{label} {year}</option>)}
+                <select aria-label={`Move ${item.invoice_number || item.client_name} to month`} value={item.reporting_month} disabled={saving || data.locks.includes(item.reporting_month)} onChange={event => assignRevenue(item.payment_id, event.target.value)} className="h-8 rounded-md border bg-white px-2 text-xs">
+                  {MONTHS.map(([monthValue, label]) => <option disabled={data.locks.includes(`${year}-${monthValue}`)} key={`${year}-${monthValue}`} value={`${year}-${monthValue}`}>{label} {year}{data.locks.includes(`${year}-${monthValue}`) ? ' (Locked)' : ''}</option>)}
                   {!item.reporting_month.startsWith(String(year)) && <option value={item.reporting_month}>{item.reporting_month}</option>}
                 </select>
               ) : <span className="text-xs text-gray-500">{item.reporting_month}</span>}
@@ -371,7 +401,7 @@ export default function ProfitLossPage() {
               <div className="min-w-0"><p className="truncate text-sm font-medium">{cost.description}</p><p className="truncate text-xs text-gray-500">{cost.remarks || 'No remarks'}</p></div>
               <p className="text-xs">{cost.supplier_payee}</p>
               <div><p className="text-sm font-bold">{money(cost.reporting_amount)}</p>{billboardId !== 'all' && Number(cost.reporting_amount) !== Number(cost.amount) && <p className="text-[10px] text-gray-500">of {money(cost.amount)}</p>}</div>
-              {isOwner && <div className="flex justify-end gap-1"><Button size="icon" variant="ghost" aria-label={`Edit ${cost.description}`} onClick={() => openEditCost(cost)}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" aria-label={`Delete ${cost.description}`} onClick={() => deleteCost(cost.id)}><Trash2 className="h-4 w-4 text-red-600" /></Button></div>}
+              {isOwner && <div className="flex justify-end gap-1"><Button size="icon" variant="ghost" disabled={data.locks.includes(cost.cost_date.slice(0, 7))} aria-label={`Edit ${cost.description}`} onClick={() => openEditCost(cost)}><Pencil className="h-4 w-4" /></Button><Button size="icon" variant="ghost" disabled={data.locks.includes(cost.cost_date.slice(0, 7))} aria-label={`Delete ${cost.description}`} onClick={() => deleteCost(cost.id)}><Trash2 className="h-4 w-4 text-red-600" /></Button></div>}
             </div>
           ))}
         </div>
@@ -416,6 +446,18 @@ export default function ProfitLossPage() {
           {actionError && <p role="alert" className="text-sm text-red-700">{actionError}</p>}
         </DialogContent>
       </Dialog>
+
+      <Dialog open={unlockMonth !== null} onOpenChange={open => { if (!open) { setUnlockMonth(null); setUnlockCode(''); setActionError('') } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Unlock {unlockMonth}</DialogTitle></DialogHeader>
+          <form onSubmit={unlockLockedMonth} className="space-y-4">
+            <div><Label htmlFor="unlock-code">Unlock code</Label><Input id="unlock-code" type="password" inputMode="numeric" autoComplete="off" required value={unlockCode} onChange={event => setUnlockCode(event.target.value)} /></div>
+            {actionError && <p role="alert" className="text-sm text-red-700">{actionError}</p>}
+            <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => { setUnlockMonth(null); setUnlockCode(''); setActionError('') }}>Cancel</Button><Button type="submit" disabled={saving || !unlockCode}>{saving ? 'Unlocking...' : 'Unlock Month'}</Button></div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
     </div>
   )
 }

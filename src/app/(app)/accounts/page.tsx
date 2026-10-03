@@ -129,14 +129,22 @@ export default function AccountsPage() {
     // Just proceed — invoice number can be added/edited by tapping the badge after
 
     const existing = monthlyPayments.find(p => p.booking_id === bookingId && p.month === monthKey)
+    let paymentError: { message: string } | null = null
     if (existing) {
       const updatePayload: Record<string, unknown> = { status: next }
       if (next === 'invoice_sent' && invoiceNum !== undefined) updatePayload.invoice_number = invoiceNum
-      await supabase.from('monthly_payments').update(updatePayload).eq('id', existing.id)
+      const { error } = await supabase.from('monthly_payments').update(updatePayload).eq('id', existing.id)
+      paymentError = error
     } else {
       const insertPayload: Record<string, unknown> = { booking_id: bookingId, month: monthKey, amount, status: next }
       if (next === 'invoice_sent' && invoiceNum !== undefined) insertPayload.invoice_number = invoiceNum
-      await supabase.from('monthly_payments').insert(insertPayload)
+      const { error } = await supabase.from('monthly_payments').insert(insertPayload)
+      paymentError = error
+    }
+    if (paymentError) {
+      alert(paymentError.message)
+      await load()
+      return
     }
 
     // When accounts → completed, auto-update profit sharing → waiting_profit_share + booking → settled

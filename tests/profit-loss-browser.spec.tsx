@@ -13,6 +13,7 @@ function fixtureScript(owner: boolean) {
     accountsCanEdit: false,
     profitLossWrites: [],
     profitLossFixture: {
+      locks: [],
       billboards: [
         { id: 'bb-a', name: 'Likas', location: 'Kota Kinabalu' },
         { id: 'bb-b', name: 'Sandakan', location: 'Sandakan' },
@@ -97,4 +98,27 @@ test('P&L granted viewer has no accounting mutation controls', async ({ mount, p
   await expect(page.getByRole('region', { name: 'Revenue reporting months' })).toHaveCount(0)
   await expect(page.getByLabel('Move @1400 to month')).toHaveCount(0)
   expect(await page.evaluate(() => (window as unknown as { profitLossWrites: unknown[] }).profitLossWrites)).toEqual([])
+})
+
+test('owner locks and code-unlocks a reporting month', async ({ mount, page }) => {
+  await page.evaluate(fixtureScript, true)
+  await page.on('dialog', dialog => dialog.accept())
+  await mount(<ProfitLossPage />)
+  const selectedMonth = await page.getByLabel('Month', { exact: true }).inputValue()
+  const year = await page.getByLabel('Year', { exact: true }).inputValue()
+  const label = new Date(`${year}-${selectedMonth}-01T00:00:00`).toLocaleString('en', { month: 'short', timeZone: 'UTC' })
+
+  await page.getByRole('button', { name: `Lock ${label} ${year}` }).click()
+  await expect(page.getByRole('button', { name: `Unlock ${label} ${year}` })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Add Cost' })).toBeDisabled()
+
+  await page.getByRole('button', { name: `Unlock ${label} ${year}` }).click()
+  await page.getByLabel('Unlock code').fill('synthetic-test-code')
+  await page.getByRole('button', { name: 'Unlock Month' }).click()
+  await expect(page.getByRole('button', { name: `Lock ${label} ${year}` })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Add Cost' })).toBeEnabled()
+
+  const writes = await page.evaluate(() => (window as unknown as { profitLossWrites: Array<{ name: string; args: Record<string, unknown> }> }).profitLossWrites)
+  expect(writes.map(write => write.name)).toEqual(expect.arrayContaining(['lock_profit_loss_month', 'unlock_profit_loss_month']))
+  expect(writes.find(write => write.name === 'unlock_profit_loss_month')?.args.p_unlock_code).toBe('synthetic-test-code')
 })

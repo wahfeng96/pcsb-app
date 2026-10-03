@@ -15,7 +15,7 @@ export type ProfitLossCost = {
   supplier_payee: string; amount: number; remarks: string | null; allocations: CostAllocation[]
 }
 export type ProfitLossData = {
-  billboards: ProfitLossBillboard[]; revenue: PaidRevenue[]; categories: CostCategory[]; costs: ProfitLossCost[]
+  billboards: ProfitLossBillboard[]; revenue: PaidRevenue[]; categories: CostCategory[]; costs: ProfitLossCost[]; locks: string[]
 }
 export type ProfitLossTotals = { revenue: number; cost: number; net: number; margin: number | null }
 
