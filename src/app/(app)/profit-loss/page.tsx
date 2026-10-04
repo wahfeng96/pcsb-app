@@ -85,6 +85,7 @@ export default function ProfitLossPage() {
   const [saving, setSaving] = useState(false)
   const [actionError, setActionError] = useState('')
   const [costOpen, setCostOpen] = useState(false)
+  const [costMonthMode, setCostMonthMode] = useState<'single' | 'multiple'>('single')
   const [categoryOpen, setCategoryOpen] = useState(false)
   const [costDraft, setCostDraft] = useState<CostDraft>(emptyCost(todayMYT))
   const [categoryName, setCategoryName] = useState('')
@@ -132,7 +133,6 @@ export default function ProfitLossPage() {
   const validAllocations = allocationsMatchTotal(draftAmount, costDraft.allocations.map(item => ({ amount: Number(item.amount) || 0 })))
   const duplicateAllocations = new Set(costDraft.allocations.map(item => item.billboard_id)).size !== costDraft.allocations.length
   const selectedMonthKey = /^\d{2}$/.test(month) ? `${year}-${month}` : null
-  const selectedMonthLocked = selectedMonthKey ? data.locks.includes(selectedMonthKey) : false
   const draftCostYear = costDraft.cost_date.slice(0, 4)
   const draftReportingMonths = costDraft.reporting_months.length ? costDraft.reporting_months : [costDraft.cost_date.slice(0, 7)]
   const draftHasLockedMonth = draftReportingMonths.some(reportingMonth => data.locks.includes(reportingMonth))
@@ -202,13 +202,20 @@ export default function ProfitLossPage() {
   }
 
   function openNewCost() {
-    if (selectedMonthLocked) return
-    setCostDraft(emptyCost(selectedMonthKey ? `${selectedMonthKey}-01` : todayMYT, activeCategories[0]?.id || ''))
+    const preferredMonth = selectedMonthKey && !data.locks.includes(selectedMonthKey) ? selectedMonthKey : null
+    const firstUnlockedMonth = MONTHS
+      .map(([monthValue]) => `${year}-${monthValue}`)
+      .find(reportingMonth => !data.locks.includes(reportingMonth))
+    const initialMonth = preferredMonth || firstUnlockedMonth || todayMYT.slice(0, 7)
+    setCostMonthMode('single')
+    setCostDraft(emptyCost(`${initialMonth}-01`, activeCategories[0]?.id || ''))
     setActionError('')
     setCostOpen(true)
   }
 
   function openEditCost(cost: ProfitLossCost) {
+    const reportingMonths = cost.reporting_months?.length ? cost.reporting_months : [cost.cost_date.slice(0, 7)]
+    setCostMonthMode(reportingMonths.length > 1 ? 'multiple' : 'single')
     setCostDraft({
       id: cost.id,
       cost_date: cost.cost_date,
@@ -217,7 +224,7 @@ export default function ProfitLossPage() {
       supplier_payee: cost.supplier_payee,
       amount: String(cost.amount),
       remarks: cost.remarks || '',
-      reporting_months: cost.reporting_months?.length ? cost.reporting_months : [cost.cost_date.slice(0, 7)],
+      reporting_months: reportingMonths,
       allocations: cost.allocations.map(allocation => ({ billboard_id: allocation.billboard_id || '', amount: String(allocation.amount) })),
     })
     setActionError('')
@@ -244,6 +251,7 @@ export default function ProfitLossPage() {
     const reportingMonth = `${draftCostYear}-${monthValue}`
     if (data.locks.includes(reportingMonth)) return
     setCostDraft(current => {
+      if (costMonthMode === 'single') return { ...current, reporting_months: [reportingMonth] }
       const selected = current.reporting_months.includes(reportingMonth)
       if (selected && current.reporting_months.length === 1) return current
       return {
@@ -253,6 +261,16 @@ export default function ProfitLossPage() {
           : [...current.reporting_months, reportingMonth].sort(),
       }
     })
+  }
+
+  function setCostAmount(amount: string) {
+    setCostDraft(current => ({
+      ...current,
+      amount,
+      allocations: current.allocations.length === 1
+        ? [{ ...current.allocations[0], amount }]
+        : current.allocations,
+    }))
   }
 
   async function saveCost(event: React.FormEvent) {
@@ -342,7 +360,7 @@ export default function ProfitLossPage() {
         {canEditProfitLoss && (
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={() => setCategoryOpen(true)}><Tags className="mr-1 h-4 w-4" /> Categories</Button>
-            <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={openNewCost} disabled={selectedMonthLocked}><Plus className="mr-1 h-4 w-4" /> Add Cost</Button>
+            <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={openNewCost}><Plus className="mr-1 h-4 w-4" /> Add Cost</Button>
           </div>
         )}
       </div>
@@ -518,20 +536,24 @@ export default function ProfitLossPage() {
               <div><Label htmlFor="cost-category">Category</Label><select id="cost-category" required value={costDraft.category_id} onChange={event => setCostDraft(current => ({ ...current, category_id: event.target.value }))} className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm"><option value="">Select category</option>{data.categories.filter(category => category.is_active || category.id === costDraft.category_id).map(category => <option key={category.id} value={category.id}>{category.name}{category.is_active ? '' : ' (Inactive)'}</option>)}</select></div>
               <div><Label htmlFor="cost-description">Description</Label><Input id="cost-description" required maxLength={300} value={costDraft.description} onChange={event => setCostDraft(current => ({ ...current, description: event.target.value }))} /></div>
               <div><Label htmlFor="cost-supplier">Supplier / Payee</Label><Input id="cost-supplier" required maxLength={200} value={costDraft.supplier_payee} onChange={event => setCostDraft(current => ({ ...current, supplier_payee: event.target.value }))} /></div>
-              <div><Label htmlFor="cost-amount">Total Amount (RM)</Label><Input id="cost-amount" type="number" required min="0.01" step="0.01" value={costDraft.amount} onChange={event => setCostDraft(current => ({ ...current, amount: event.target.value }))} /></div>
+              <div><Label htmlFor="cost-amount">Total Amount (RM)</Label><Input id="cost-amount" type="number" required min="0.01" step="0.01" value={costDraft.amount} onChange={event => setCostAmount(event.target.value)} /></div>
               <div className="sm:col-span-2"><Label htmlFor="cost-remarks">Remarks</Label><Textarea id="cost-remarks" value={costDraft.remarks} onChange={event => setCostDraft(current => ({ ...current, remarks: event.target.value }))} /></div>
             </div>
             <fieldset className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <legend className="text-sm font-medium">Allocate to months ({draftCostYear})</legend>
-                <span className="text-xs text-gray-500">{draftReportingMonths.length === 1 ? 'Full amount in one month' : `Split equally across ${draftReportingMonths.length} months`}</span>
+                <div className="flex rounded-md border border-gray-300 p-0.5" aria-label="Cost month selection mode">
+                  <button type="button" aria-pressed={costMonthMode === 'single'} onClick={() => { setCostMonthMode('single'); setCostDraft(current => ({ ...current, reporting_months: [current.reporting_months[0] || current.cost_date.slice(0, 7)] })) }} className={`rounded px-2 py-1 text-xs ${costMonthMode === 'single' ? 'bg-gray-900 text-white' : 'text-gray-600'}`}>One month</button>
+                  <button type="button" aria-pressed={costMonthMode === 'multiple'} onClick={() => setCostMonthMode('multiple')} className={`rounded px-2 py-1 text-xs ${costMonthMode === 'multiple' ? 'bg-gray-900 text-white' : 'text-gray-600'}`}>Multiple months</button>
+                </div>
               </div>
+              <p className="text-xs text-gray-500">{draftReportingMonths.length === 1 ? 'Full amount in one month' : `Split equally across ${draftReportingMonths.length} months`}</p>
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
                 {MONTHS.map(([monthValue, label]) => {
                   const reportingMonth = `${draftCostYear}-${monthValue}`
                   const checked = draftReportingMonths.includes(reportingMonth)
                   const locked = data.locks.includes(reportingMonth)
-                  return <label key={monthValue} className={`flex h-10 items-center justify-center gap-2 rounded-md border px-2 text-sm ${checked ? 'border-red-600 bg-red-50 font-medium text-red-700' : 'border-gray-300 bg-white'} ${locked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-red-300'}`}><input type="checkbox" className="h-4 w-4 accent-red-600" checked={checked} disabled={locked} onChange={() => toggleCostMonth(monthValue)} /><span>{label}</span></label>
+                  return <label key={monthValue} className={`flex h-10 items-center justify-center gap-2 rounded-md border px-2 text-sm ${checked ? 'border-red-600 bg-red-50 font-medium text-red-700' : 'border-gray-300 bg-white'} ${locked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-red-300'}`} title={locked ? `${label} ${draftCostYear} is locked` : `Allocate cost to ${label} ${draftCostYear}`}><input type={costMonthMode === 'single' ? 'radio' : 'checkbox'} name={costMonthMode === 'single' ? 'cost-reporting-month' : undefined} className="h-4 w-4 accent-red-600" checked={checked} disabled={locked} onChange={() => toggleCostMonth(monthValue)} /><span>{label}{locked ? ' (Locked)' : ''}</span></label>
                 })}
               </div>
               {draftHasLockedMonth && <p role="alert" className="text-xs text-red-700">A selected month is locked. Unlock it before editing this cost.</p>}
