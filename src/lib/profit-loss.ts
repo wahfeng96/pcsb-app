@@ -5,6 +5,7 @@ export const UNKNOWN_REVENUE_MONTH = 'unknown'
 export type ProfitLossBillboard = { id: string; name: string; location: string }
 export type PaidRevenue = {
   revenue_id: string; payment_id: string | null; booking_id: string; billing_month: string; reporting_month: string
+  unknown_year: number
   source: 'payment' | 'settled_booking'
   has_persisted_assignment: boolean; invoice_number: string | null; client_id: string
   client_name: string; brand_name: string | null; billboard_id: string; billboard_name: string
@@ -45,7 +46,7 @@ export function allocationsMatchTotal(total: number, allocations: Array<Pick<Cos
 
 export function profitLossYears(revenue: PaidRevenue[], costs: ProfitLossCost[], currentYear: number): number[] {
   const values = new Set<number>([currentYear])
-  revenue.forEach(item => values.add(Number((item.reporting_month === UNKNOWN_REVENUE_MONTH ? item.billing_month : item.reporting_month).slice(0, 4))))
+  revenue.forEach(item => values.add(item.reporting_month === UNKNOWN_REVENUE_MONTH ? item.unknown_year : Number(item.reporting_month.slice(0, 4))))
   costs.forEach(item => (item.reporting_months?.length ? item.reporting_months : [item.cost_date.slice(0, 7)]).forEach(reportingMonth => values.add(Number(reportingMonth.slice(0, 4)))))
   return [...values].filter(Number.isFinite).sort((a, b) => b - a)
 }
@@ -54,7 +55,7 @@ export function revenueForPeriod(revenue: PaidRevenue[], year: number, month: st
   return revenue.filter(item => {
     if (month === UNKNOWN_REVENUE_MONTH) {
       return item.reporting_month === UNKNOWN_REVENUE_MONTH
-        && Number(item.billing_month.slice(0, 4)) === year
+        && item.unknown_year === year
         && (billboardId === 'all' || item.billboard_id === billboardId)
     }
     const [itemYear, itemMonth] = item.reporting_month.split('-')
@@ -76,7 +77,7 @@ export function searchRevenueForYear(
   if (!search) return []
 
   return revenue.filter(item => {
-    const itemYear = Number((item.reporting_month === UNKNOWN_REVENUE_MONTH ? item.billing_month : item.reporting_month).slice(0, 4))
+    const itemYear = item.reporting_month === UNKNOWN_REVENUE_MONTH ? item.unknown_year : Number(item.reporting_month.slice(0, 4))
     if (itemYear !== year || (billboardId !== 'all' && item.billboard_id !== billboardId)) return false
 
     const values: Record<RevenueSearchField, string[]> = {

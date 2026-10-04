@@ -109,6 +109,11 @@ export default function ProfitLossPage() {
   const years = useMemo(() => {
     return profitLossYears(data.revenue, data.costs, currentYear)
   }, [currentYear, data.costs, data.revenue])
+  const moveYears = useMemo(() => {
+    const values = new Set([...years, year, currentYear - 1, currentYear, currentYear + 1])
+    data.revenue.forEach(item => values.add(Number(item.billing_month.slice(0, 4))))
+    return [...values].filter(Number.isFinite).sort((a, b) => b - a)
+  }, [currentYear, data.revenue, year, years])
 
   const periodRevenue = useMemo(() => revenueForPeriod(data.revenue, year, month, billboardId), [billboardId, data.revenue, month, year])
   const searchedRevenue = useMemo(
@@ -440,7 +445,7 @@ export default function ProfitLossPage() {
               onClick={() => setMonth(UNKNOWN_REVENUE_MONTH)}
               className={`min-w-[88px] rounded-md border border-amber-300 px-2 py-2 text-center text-xs ${draggingRevenue ? 'bg-amber-100 ring-1 ring-amber-500' : 'bg-amber-50'} ${month === UNKNOWN_REVENUE_MONTH ? 'ring-1 ring-amber-600' : ''}`}
             >
-              <span className="font-medium text-amber-900">Unknown</span>
+              <span className="font-medium text-amber-900">Unknown {year}</span>
               <span className="block text-[10px] text-amber-700">{revenueForPeriod(data.revenue, year, UNKNOWN_REVENUE_MONTH, billboardId).length} received</span>
             </button>
           </div>
@@ -468,7 +473,7 @@ export default function ProfitLossPage() {
               <div>
                 {item.invoice_number ? <Link className="text-sm font-semibold text-blue-700 hover:underline" href={`/accounts?invoice=${encodeURIComponent(item.invoice_number)}`}>{item.invoice_number}</Link> : <span className="text-sm font-medium text-gray-500">No invoice number</span>}
                 <p className="text-[10px] text-gray-500">Billing {item.billing_month}</p>
-                {!item.has_persisted_assignment && <p className="text-[10px] text-amber-700">Received · reporting month unknown</p>}
+                {!item.has_persisted_assignment && <p className="text-[10px] text-amber-700">Received · Unknown {item.unknown_year}</p>}
               </div>
               <div className="min-w-0"><p className="truncate text-sm font-medium">{item.client_name}</p><p className="truncate text-xs text-gray-500">{item.brand_name || 'No brand'}</p></div>
               <div><p className="text-xs font-medium">{item.billboard_name}</p><p className="text-[10px] text-gray-500">{item.billboard_location}</p></div>
@@ -476,8 +481,11 @@ export default function ProfitLossPage() {
               {canEditProfitLoss ? (
                 <select aria-label={`Move ${item.invoice_number || item.client_name} to month`} value={item.reporting_month} disabled={saving || data.locks.includes(item.reporting_month)} onChange={event => assignRevenue(item.revenue_id, event.target.value)} className="h-8 rounded-md border bg-white px-2 text-xs">
                   <option value={UNKNOWN_REVENUE_MONTH}>Unknown</option>
-                  {MONTHS.map(([monthValue, label]) => <option disabled={data.locks.includes(`${year}-${monthValue}`)} key={`${year}-${monthValue}`} value={`${year}-${monthValue}`}>{label} {year}{data.locks.includes(`${year}-${monthValue}`) ? ' (Locked)' : ''}</option>)}
-                  {item.reporting_month !== UNKNOWN_REVENUE_MONTH && !item.reporting_month.startsWith(String(year)) && <option value={item.reporting_month}>{item.reporting_month}</option>}
+                  {moveYears.map(targetYear => (
+                    <optgroup key={targetYear} label={String(targetYear)}>
+                      {MONTHS.map(([monthValue, label]) => <option disabled={data.locks.includes(`${targetYear}-${monthValue}`)} key={`${targetYear}-${monthValue}`} value={`${targetYear}-${monthValue}`}>{label} {targetYear}{data.locks.includes(`${targetYear}-${monthValue}`) ? ' (Locked)' : ''}</option>)}
+                    </optgroup>
+                  ))}
                 </select>
               ) : <span className="text-xs text-gray-500">{item.reporting_month}</span>}
             </div>

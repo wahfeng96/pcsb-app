@@ -19,9 +19,9 @@ function fixtureScript(owner: boolean) {
         { id: 'bb-b', name: 'Sandakan', location: 'Sandakan' },
       ],
       revenue: [
-        { revenue_id: 'payment:paid-a', payment_id: 'paid-a', source: 'payment', booking_id: 'booking-a', billing_month: `${year}-08`, reporting_month: monthKey, has_persisted_assignment: true, invoice_number: '@1400', client_id: 'client-a', client_name: 'Synthetic Client A', brand_name: 'Brand A', billboard_id: 'bb-a', billboard_name: 'Likas', billboard_location: 'Kota Kinabalu', amount: 1000 },
-        { revenue_id: `unknown:booking-b:${year}-07`, payment_id: null, source: 'settled_booking', booking_id: 'booking-b', billing_month: `${year}-07`, reporting_month: 'unknown', has_persisted_assignment: false, invoice_number: null, client_id: 'client-b', client_name: 'Synthetic Client B', brand_name: 'Brand B', billboard_id: 'bb-b', billboard_name: 'Sandakan', billboard_location: 'Sandakan', amount: 2500 },
-        { revenue_id: 'unknown:booking-old:2024-11', payment_id: 'pending-old', source: 'settled_booking', booking_id: 'booking-old', billing_month: '2024-11', reporting_month: 'unknown', has_persisted_assignment: false, invoice_number: '@1300', client_id: 'client-a', client_name: 'Historical Client', brand_name: 'Old Brand', billboard_id: 'bb-a', billboard_name: 'Likas', billboard_location: 'Kota Kinabalu', amount: 500 },
+        { revenue_id: 'payment:paid-a', payment_id: 'paid-a', source: 'payment', booking_id: 'booking-a', billing_month: `${year}-08`, reporting_month: monthKey, unknown_year: Number(year), has_persisted_assignment: true, invoice_number: '@1400', client_id: 'client-a', client_name: 'Synthetic Client A', brand_name: 'Brand A', billboard_id: 'bb-a', billboard_name: 'Likas', billboard_location: 'Kota Kinabalu', amount: 1000 },
+        { revenue_id: 'unknown:booking-b:2025-12', payment_id: null, source: 'settled_booking', booking_id: 'booking-b', billing_month: '2025-12', reporting_month: 'unknown', unknown_year: 2026, has_persisted_assignment: false, invoice_number: null, client_id: 'client-b', client_name: 'Synthetic Client B', brand_name: 'Brand B', billboard_id: 'bb-b', billboard_name: 'Sandakan', billboard_location: 'Sandakan', amount: 2500 },
+        { revenue_id: 'unknown:booking-old:2024-11', payment_id: 'pending-old', source: 'settled_booking', booking_id: 'booking-old', billing_month: '2024-11', reporting_month: 'unknown', unknown_year: 2024, has_persisted_assignment: false, invoice_number: '@1300', client_id: 'client-a', client_name: 'Historical Client', brand_name: 'Old Brand', billboard_id: 'bb-a', billboard_name: 'Likas', billboard_location: 'Kota Kinabalu', amount: 500 },
       ],
       categories: [
         { id: 'cat-power', name: 'Power', is_active: true },
@@ -48,7 +48,7 @@ for (const mobile of [false, true]) {
     await expect(page.getByLabel('P&L summary').getByText('RM 600.00', { exact: true })).toBeVisible()
     await expect(page.getByText('Net Profit').locator('..')).toContainText('RM 400.00')
     await expect(page.getByRole('link', { name: '@1400' })).toHaveAttribute('href', '/accounts?invoice=%401400')
-    await expect(page.getByRole('button', { name: /Unknown 1 received/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Unknown 2026 1 received/ })).toBeVisible()
     await expect(page.getByLabel('Year', { exact: true }).locator('option[value="2024"]')).toHaveCount(1)
 
     await page.getByRole('button', { name: 'Likas', exact: true }).click()
@@ -64,12 +64,14 @@ for (const mobile of [false, true]) {
     await expect(page.getByText('No revenue matches this search.')).toBeVisible()
     await page.getByLabel('Search revenue', { exact: true }).fill('Brand B')
     await expect(page.getByText('1 result', { exact: true })).toBeVisible()
-    await expect(page.getByText('Received · reporting month unknown')).toBeVisible()
-    await expect(page.getByText(`Billing ${initialYear}-07`)).toBeVisible()
+    await expect(page.getByText('Received · Unknown 2026')).toBeVisible()
+    await expect(page.getByText('Billing 2025-12')).toBeVisible()
     await expect(page.getByLabel('Month', { exact: true })).toHaveValue(initialMonth)
     await expect(page.getByLabel('Move Synthetic Client B to month').locator('option[value="unknown"]')).toHaveCount(1)
-    await page.getByLabel('Move Synthetic Client B to month').selectOption(`${initialYear}-01`)
+    await page.getByLabel('Move Synthetic Client B to month').selectOption('2025-12')
     await expect.poll(async () => page.evaluate(() => (window as unknown as { profitLossWrites: Array<{ name: string }> }).profitLossWrites.map(write => write.name))).toContain('assign_profit_loss_revenue')
+    const crossYearWrite = await page.evaluate(() => (window as unknown as { profitLossWrites: Array<{ name: string; args: Record<string, unknown> }> }).profitLossWrites.find(write => write.name === 'assign_profit_loss_revenue'))
+    expect(crossYearWrite?.args.p_reporting_month).toBe('2025-12-01')
     await page.getByLabel('Clear revenue search').click()
     await expect(page.getByLabel('Search revenue', { exact: true })).toHaveValue('')
     await page.getByLabel('Month', { exact: true }).selectOption(initialMonth)

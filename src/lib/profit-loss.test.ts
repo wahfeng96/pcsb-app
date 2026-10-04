@@ -3,6 +3,7 @@ import { allocationsMatchTotal, calculateProfitLoss, canAccessProfitLoss, costsF
 
 const revenue = (overrides: Partial<PaidRevenue> = {}): PaidRevenue => ({
   revenue_id: 'payment:payment-1', payment_id: 'payment-1', source: 'payment', booking_id: 'booking-1', billing_month: '2026-08', reporting_month: '2026-10',
+  unknown_year: 2026,
   has_persisted_assignment: true, invoice_number: '@1400', client_id: 'client-1', client_name: 'Client',
   brand_name: 'Brand', billboard_id: 'billboard-a', billboard_name: 'Screen A', billboard_location: 'KK', amount: 1000,
   ...overrides,
@@ -23,23 +24,23 @@ describe('P&L calculations and filters', () => {
     expect(revenueForPeriod(rows, 2026, 'all', 'billboard-b').map(item => item.payment_id)).toEqual(['payment-2'])
     expect(calculateProfitLoss(revenueForPeriod(rows, 2026, '10', 'all'), []).revenue).toBe(1000)
   })
-  it('keeps Unknown out of month/year totals and filters it by billing year', () => {
+  it('keeps Unknown out of month/year totals and filters it by MYT settlement year', () => {
     const rows = [
       revenue(),
-      revenue({ revenue_id: 'unknown:booking-2:2026-07', payment_id: null, source: 'settled_booking', booking_id: 'booking-2', billing_month: '2026-07', reporting_month: UNKNOWN_REVENUE_MONTH, amount: 2000 }),
-      revenue({ revenue_id: 'unknown:booking-3:2025-12', payment_id: null, source: 'settled_booking', booking_id: 'booking-3', billing_month: '2025-12', reporting_month: UNKNOWN_REVENUE_MONTH, amount: 3000 }),
+      revenue({ revenue_id: 'unknown:booking-2:2025-12', payment_id: null, source: 'settled_booking', booking_id: 'booking-2', billing_month: '2025-12', reporting_month: UNKNOWN_REVENUE_MONTH, unknown_year: 2026, amount: 2000 }),
+      revenue({ revenue_id: 'unknown:booking-3:2025-12', payment_id: null, source: 'settled_booking', booking_id: 'booking-3', billing_month: '2025-12', reporting_month: UNKNOWN_REVENUE_MONTH, unknown_year: 2025, amount: 3000 }),
     ]
     expect(revenueForPeriod(rows, 2026, 'all', 'all').map(item => item.revenue_id)).toEqual(['payment:payment-1'])
-    expect(revenueForPeriod(rows, 2026, UNKNOWN_REVENUE_MONTH, 'all').map(item => item.revenue_id)).toEqual(['unknown:booking-2:2026-07'])
+    expect(revenueForPeriod(rows, 2026, UNKNOWN_REVENUE_MONTH, 'all').map(item => item.revenue_id)).toEqual(['unknown:booking-2:2025-12'])
     expect(profitLossYears(rows, [cost({ cost_date: '2024-01-02', reporting_months: ['2024-01'] })], 2026)).toEqual([2026, 2025, 2024])
   })
   it('searches assigned and Unknown revenue across the selected year and billboard', () => {
     const rows = [
       revenue(),
-      revenue({ revenue_id: 'unknown:booking-2:2026-07', payment_id: null, source: 'settled_booking', booking_id: 'booking-2', billing_month: '2026-07', reporting_month: UNKNOWN_REVENUE_MONTH, client_name: 'Don Legacy', brand_name: 'Legacy Gold', billboard_id: 'billboard-b', billboard_name: 'Sandakan', billboard_location: 'Bandar Indah', amount: 2000 }),
-      revenue({ revenue_id: 'unknown:booking-3:2025-12', payment_id: null, source: 'settled_booking', booking_id: 'booking-3', billing_month: '2025-12', reporting_month: UNKNOWN_REVENUE_MONTH, client_name: 'Old Client', amount: 3000 }),
+      revenue({ revenue_id: 'unknown:booking-2:2025-12', payment_id: null, source: 'settled_booking', booking_id: 'booking-2', billing_month: '2025-12', reporting_month: UNKNOWN_REVENUE_MONTH, unknown_year: 2026, client_name: 'Don Legacy', brand_name: 'Legacy Gold', billboard_id: 'billboard-b', billboard_name: 'Sandakan', billboard_location: 'Bandar Indah', amount: 2000 }),
+      revenue({ revenue_id: 'unknown:booking-3:2025-12', payment_id: null, source: 'settled_booking', booking_id: 'booking-3', billing_month: '2025-12', reporting_month: UNKNOWN_REVENUE_MONTH, unknown_year: 2025, client_name: 'Old Client', amount: 3000 }),
     ]
-    expect(searchRevenueForYear(rows, 2026, 'all', 'don legacy', 'all').map(item => item.revenue_id)).toEqual(['unknown:booking-2:2026-07'])
+    expect(searchRevenueForYear(rows, 2026, 'all', 'don legacy', 'all').map(item => item.revenue_id)).toEqual(['unknown:booking-2:2025-12'])
     expect(searchRevenueForYear(rows, 2026, 'billboard-b', 'bandar indah', 'billboard')).toHaveLength(1)
     expect(searchRevenueForYear(rows, 2026, 'billboard-a', 'legacy gold', 'brand')).toEqual([])
     expect(searchRevenueForYear(rows, 2026, 'all', '2000', 'all')).toHaveLength(1)
