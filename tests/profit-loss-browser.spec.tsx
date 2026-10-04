@@ -22,6 +22,7 @@ function fixtureScript(owner: boolean) {
         { revenue_id: 'payment:paid-a', payment_id: 'paid-a', source: 'payment', booking_id: 'booking-a', billing_month: `${year}-08`, reporting_month: monthKey, unknown_year: Number(year), has_persisted_assignment: true, invoice_number: '@1400', client_id: 'client-a', client_name: 'Synthetic Client A', brand_name: 'Brand A', billboard_id: 'bb-a', billboard_name: 'Likas', billboard_location: 'Kota Kinabalu', amount: 1000 },
         { revenue_id: 'unknown:booking-b:2025-12', payment_id: null, source: 'settled_booking', booking_id: 'booking-b', billing_month: '2025-12', reporting_month: 'unknown', unknown_year: 2026, has_persisted_assignment: false, invoice_number: null, client_id: 'client-b', client_name: 'Synthetic Client B', brand_name: 'Brand B', billboard_id: 'bb-b', billboard_name: 'Sandakan', billboard_location: 'Sandakan', amount: 2500 },
         { revenue_id: 'unknown:booking-old:2024-11', payment_id: 'pending-old', source: 'settled_booking', booking_id: 'booking-old', billing_month: '2024-11', reporting_month: 'unknown', unknown_year: 2024, has_persisted_assignment: false, invoice_number: '@1300', client_id: 'client-a', client_name: 'Historical Client', brand_name: 'Old Brand', billboard_id: 'bb-a', billboard_name: 'Likas', billboard_location: 'Kota Kinabalu', amount: 500 },
+        { revenue_id: 'unknown:booking-2025:2025-02', payment_id: 'paid-2025', source: 'payment', booking_id: 'booking-2025', billing_month: '2025-02', reporting_month: 'unknown', unknown_year: 2025, has_persisted_assignment: false, invoice_number: '@1350', client_id: 'client-b', client_name: 'Historical 2025 Client', brand_name: 'Historical 2025 Brand', billboard_id: 'bb-b', billboard_name: 'Sandakan', billboard_location: 'Sandakan', amount: 750 },
       ],
       categories: [
         { id: 'cat-power', name: 'Power', is_active: true },
@@ -43,6 +44,9 @@ for (const mobile of [false, true]) {
     await page.evaluate(fixtureScript, true)
     await mount(<ProfitLossPage />)
 
+    const initialMonth = await page.getByLabel('Month', { exact: true }).inputValue()
+    const initialYear = await page.getByLabel('Year', { exact: true }).inputValue()
+
     await expect(page.getByRole('heading', { name: 'Profit & Loss' })).toBeVisible()
     await expect(page.getByLabel('P&L summary').getByText('RM 1,000.00', { exact: true })).toBeVisible()
     await expect(page.getByLabel('P&L summary').getByText('RM 600.00', { exact: true })).toBeVisible()
@@ -50,6 +54,17 @@ for (const mobile of [false, true]) {
     await expect(page.getByRole('link', { name: '@1400' })).toHaveAttribute('href', '/accounts?invoice=%401400')
     await expect(page.getByRole('button', { name: /Unknown 2026 1 received/ })).toBeVisible()
     await expect(page.getByLabel('Year', { exact: true }).locator('option[value="2024"]')).toHaveCount(1)
+    await expect(page.getByLabel('Year', { exact: true }).locator('option[value="2025"]')).toHaveCount(1)
+
+    await page.getByLabel('Year', { exact: true }).selectOption('2024')
+    await page.getByLabel('Month', { exact: true }).selectOption('unknown')
+    await expect(page.getByText('Historical Client')).toBeVisible()
+    await expect(page.getByText('Historical 2025 Client')).toHaveCount(0)
+    await page.getByLabel('Year', { exact: true }).selectOption('2025')
+    await expect(page.getByText('Historical 2025 Client')).toBeVisible()
+    await expect(page.getByText('Historical Client')).toHaveCount(0)
+    await page.getByLabel('Year', { exact: true }).selectOption(initialYear)
+    await page.getByLabel('Month', { exact: true }).selectOption(initialMonth)
 
     await page.getByRole('button', { name: 'Likas', exact: true }).click()
     await expect(page.getByLabel('P&L summary').getByText('RM 1,000.00', { exact: true })).toBeVisible()
@@ -57,8 +72,6 @@ for (const mobile of [false, true]) {
     await expect(page.getByText('Synthetic Client B')).toHaveCount(0)
     await page.getByRole('button', { name: 'All company' }).click()
 
-    const initialMonth = await page.getByLabel('Month', { exact: true }).inputValue()
-    const initialYear = await page.getByLabel('Year', { exact: true }).inputValue()
     await page.getByLabel('Search revenue by').selectOption('brand')
     await page.getByLabel('Search revenue', { exact: true }).fill('Synthetic Client B')
     await expect(page.getByText('No revenue matches this search.')).toBeVisible()
