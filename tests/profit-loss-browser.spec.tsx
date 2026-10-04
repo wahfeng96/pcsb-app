@@ -97,8 +97,11 @@ for (const mobile of [false, true]) {
       await expect.poll(async () => page.evaluate(() => (window as unknown as { profitLossWrites: Array<{ name: string }> }).profitLossWrites.map(write => write.name))).toContain('unassign_profit_loss_revenue')
     }
 
+    await page.getByLabel('Month', { exact: true }).selectOption('03')
     await page.getByRole('button', { name: 'Add Cost' }).click()
-    await page.getByLabel('Date').fill('2026-10-15')
+    await expect(page.getByLabel('Date')).toHaveValue(`${initialYear}-03-01`)
+    await expect(page.getByRole('checkbox', { name: 'Mar' })).toBeChecked()
+    await page.getByLabel('Date').fill(`${initialYear}-03-15`)
     await page.getByLabel('Category').selectOption('cat-power')
     await page.getByLabel('Description').fill('Synthetic maintenance')
     await page.getByLabel('Supplier / Payee').fill('Synthetic Vendor')
@@ -119,7 +122,7 @@ for (const mobile of [false, true]) {
     await page.getByRole('button', { name: 'Save Cost' }).click()
     await expect.poll(async () => page.evaluate(() => (window as unknown as { profitLossWrites: Array<{ name: string }> }).profitLossWrites.map(write => write.name))).toContain('save_profit_loss_cost')
     const costWrite = await page.evaluate(() => (window as unknown as { profitLossWrites: Array<{ name: string; args: Record<string, unknown> }> }).profitLossWrites.find(write => write.name === 'save_profit_loss_cost'))
-    expect(costWrite?.args.p_reporting_months).toEqual(['2026-01-01', '2026-02-01', '2026-10-01'])
+    expect(costWrite?.args.p_reporting_months).toEqual([`${initialYear}-01-01`, `${initialYear}-02-01`, `${initialYear}-03-01`])
 
     const output = `/Users/canggih/.openclaw/workspace/main/output/pcsb-pl-page-20261002/profit-loss-${mobile ? 'mobile' : 'desktop'}.png`
     await page.screenshot({ path: output, fullPage: true })

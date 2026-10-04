@@ -131,7 +131,7 @@ export default function ProfitLossPage() {
   const draftAmount = Number(costDraft.amount)
   const validAllocations = allocationsMatchTotal(draftAmount, costDraft.allocations.map(item => ({ amount: Number(item.amount) || 0 })))
   const duplicateAllocations = new Set(costDraft.allocations.map(item => item.billboard_id)).size !== costDraft.allocations.length
-  const selectedMonthKey = month === 'all' ? null : `${year}-${month}`
+  const selectedMonthKey = /^\d{2}$/.test(month) ? `${year}-${month}` : null
   const selectedMonthLocked = selectedMonthKey ? data.locks.includes(selectedMonthKey) : false
   const draftCostYear = costDraft.cost_date.slice(0, 4)
   const draftReportingMonths = costDraft.reporting_months.length ? costDraft.reporting_months : [costDraft.cost_date.slice(0, 7)]
@@ -203,7 +203,7 @@ export default function ProfitLossPage() {
 
   function openNewCost() {
     if (selectedMonthLocked) return
-    setCostDraft(emptyCost(todayMYT, activeCategories[0]?.id || ''))
+    setCostDraft(emptyCost(selectedMonthKey ? `${selectedMonthKey}-01` : todayMYT, activeCategories[0]?.id || ''))
     setActionError('')
     setCostOpen(true)
   }
