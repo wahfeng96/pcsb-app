@@ -8,6 +8,27 @@ export type OtherEntry = {
 }
 export type OtherDraft = Omit<OtherEntry, 'id' | 'amount'> & { amount: string }
 
+// Preserve the day where possible; shorter months use their last valid day.
+// Arithmetic avoids timezone shifts and Date's special treatment of years 1–99.
+export function otherExpenseDates(year: string, months: string[], day: number): string[] {
+  if (!/^\d{4}$/.test(year) || Number(year) < 1 || !Number.isInteger(day) || day < 1 || day > 31 ||
+      !months.length || months.some(month => !/^(0[1-9]|1[0-2])$/.test(month))) {
+    throw new Error('Choose at least one month and a day from 1 to 31 in a valid year.')
+  }
+  const value = Number(year)
+  const leap = value % 4 === 0 && (value % 100 !== 0 || value % 400 === 0)
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+  return [...new Set(months)].sort().map(month => `${year}-${month}-${String(Math.min(day, days[Number(month) - 1])).padStart(2, '0')}`)
+}
+
+export function buildOtherExpenses(draft: OtherDraft, year: string, months: string[], day: number) {
+  const dates = otherExpenseDates(year, months, day)
+  const validation = validateOtherEntry({ ...draft, kind: 'expense', entry_date: dates[0] })
+  if (validation) throw new Error(validation)
+  return dates.map(entry_date => ({ entry_date, kind: 'expense' as const,
+    description: draft.description.trim(), category: draft.category?.trim() || null, amount: Number(draft.amount) }))
+}
+
 export function validateOtherEntry(draft: OtherDraft): string | null {
   if (!['income', 'expense'].includes(draft.kind)) return 'Choose income or expense.'
   if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.entry_date) || draft.entry_date < '0001-01-01' ||

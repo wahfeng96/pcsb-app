@@ -58,9 +58,22 @@ await rejects("INSERT INTO public.other_profit_loss_entries (entry_date,kind,des
 await rejects("INSERT INTO public.other_profit_loss_entries (entry_date,kind,description,amount) VALUES ('2026-10-09','income',E'bad\\ntext',1)", 'reject control text')
 await rejects("INSERT INTO public.other_profit_loss_entries (entry_date,kind,description,category,amount) VALUES ('2026-10-09','income','invalid',' ',1)", 'reject blank category')
 await rejects("INSERT INTO public.other_profit_loss_entries (entry_date,kind,description,amount) VALUES ('2026-02-30','income','invalid',1)", 'reject invalid date')
+// A PostgREST array insert is one PostgreSQL INSERT statement, so one invalid
+// monthly row rolls back every row in that request. Use only synthetic records.
+await db.exec("INSERT INTO public.other_profit_loss_entries (entry_date,kind,description,amount) VALUES ('2026-01-31','expense','Synthetic monthly rental',1000), ('2026-02-28','expense','Synthetic monthly rental',1000), ('2026-03-31','expense','Synthetic monthly rental',1000)")
+check((await db.query("SELECT count(*)::int AS n, sum(amount) AS total FROM public.other_profit_loss_entries WHERE description='Synthetic monthly rental'")).rows[0].total === '3000.00', 'batch stores amount per month')
+check((await db.query("SELECT count(*)::int AS n FROM public.other_profit_loss_entries WHERE description='Synthetic monthly rental'")).rows[0].n === 3, 'batch stores three independent entries')
+await rejects("INSERT INTO public.other_profit_loss_entries (entry_date,kind,description,amount) VALUES ('2026-01-01','expense','Failed batch',1000), ('2026-02-01','expense','Failed batch',0), ('2026-03-01','expense','Failed batch',1000)", 'invalid middle row rejects whole batch')
+check((await db.query("SELECT count(*)::int AS n FROM public.other_profit_loss_entries WHERE description='Failed batch'")).rows[0].n === 0, 'failed batch leaves no partial entries')
+await db.exec("UPDATE public.other_profit_loss_entries SET amount=1100 WHERE description='Synthetic monthly rental' AND entry_date='2026-02-28'")
+check((await db.query("SELECT sum(amount) AS total FROM public.other_profit_loss_entries WHERE description='Synthetic monthly rental'")).rows[0].total === '3100.00', 'single-row edit does not multiply across batch')
+await db.exec("DELETE FROM public.other_profit_loss_entries WHERE description='Synthetic monthly rental' AND entry_date='2026-02-28'")
+check((await db.query("SELECT sum(amount) AS total FROM public.other_profit_loss_entries WHERE description='Synthetic monthly rental'")).rows[0].total === '2000.00', 'single-row delete preserves sibling months')
+await db.exec("DELETE FROM public.other_profit_loss_entries WHERE description='Synthetic monthly rental'")
 await identity(2)
 check((await db.query('SELECT count(*)::int AS n FROM public.other_profit_loss_entries')).rows[0].n === 2, 'approved explicit viewer reads')
 await rejects("INSERT INTO public.other_profit_loss_entries (entry_date,kind,description,amount) VALUES ('2026-10-09','income','viewer write',1)", 'viewer cannot insert')
+await rejects("INSERT INTO public.other_profit_loss_entries (entry_date,kind,description,amount) VALUES ('2026-01-01','expense','Viewer batch',1000), ('2026-02-01','expense','Viewer batch',1000)", 'viewer cannot insert a multi-month batch')
 check((await db.query("UPDATE public.other_profit_loss_entries SET amount=999 RETURNING id")).rows.length === 0, 'viewer cannot update')
 check((await db.query('DELETE FROM public.other_profit_loss_entries RETURNING id')).rows.length === 0, 'viewer cannot delete')
 for (const id of [3,4,5]) {

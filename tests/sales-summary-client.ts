@@ -22,7 +22,8 @@ export function createClient() {
       const state = window as unknown as { otherEntries: Array<Record<string, unknown>>; otherError?: string; otherWrites: Array<Record<string, unknown>> }
       let result = [...state.otherEntries]
       let operation = 'read'
-      let payload: Record<string, unknown> = {}
+      let payload: Record<string, unknown> | Record<string, unknown>[] = {}
+      let single = false
       let targetId = ''
       const query = {
         select: () => query,
@@ -32,14 +33,14 @@ export function createClient() {
         range: (from: number, to: number) => { result = result.slice(from, to + 1); return query },
         eq: (key: string, value: string) => { targetId = value; result = result.filter(row => row[key] === value); return query },
         update: (value: Record<string, unknown>) => { operation = 'update'; payload = value; return query },
-        insert: (value: Record<string, unknown>) => { operation = 'insert'; payload = value; return query },
+        insert: (value: Record<string, unknown> | Record<string, unknown>[]) => { operation = 'insert'; payload = value; return query },
         delete: () => { operation = 'delete'; return query },
-        single: () => query,
+        single: () => { single = true; return query },
         then: (resolve: (value: unknown) => unknown) => {
           if (state.otherError) return Promise.resolve({ data: null, error: { message: state.otherError } }).then(resolve)
           if (operation === 'read') return Promise.resolve({ data: result, error: null }).then(resolve)
           state.otherWrites.push({ operation, payload, id: targetId })
-          if (operation === 'insert') { const row = { ...payload, id: crypto.randomUUID() }; state.otherEntries.push(row); return Promise.resolve({ data: row, error: null }).then(resolve) }
+          if (operation === 'insert') { const rows = (Array.isArray(payload) ? payload : [payload]).map(value => ({ ...value, id: crypto.randomUUID() })); state.otherEntries.push(...rows); return Promise.resolve({ data: single ? rows[0] : rows, error: null }).then(resolve) }
           const row = state.otherEntries.find(entry => entry.id === targetId)
           if (operation === 'update' && row) Object.assign(row, payload)
           if (operation === 'delete') state.otherEntries = state.otherEntries.filter(entry => entry.id !== targetId)
