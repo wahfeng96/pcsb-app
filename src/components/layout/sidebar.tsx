@@ -17,6 +17,7 @@ const navItems = [
   { href: '/accounts', label: 'Accounts', icon: FileText },
   { href: '/sales-summary', label: 'Sales Summary', icon: BarChart3 },
   { href: '/profit-loss', label: 'P&L', icon: CircleDollarSign },
+  { href: '/other-profit-loss', label: 'Other P&L', icon: CircleDollarSign },
   { href: '/profit-sharing', label: 'Profit Sharing', icon: HandCoins },
   { href: '/commission', label: 'Commission', icon: Percent },
   { href: '/users', label: 'Users', icon: Shield },

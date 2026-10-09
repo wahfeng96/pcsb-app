@@ -18,6 +18,36 @@ export function createClient() {
       return Promise.resolve({ data: null, error: null })
     },
     from(table: string) {
+    if (table === 'other_profit_loss_entries') {
+      const state = window as unknown as { otherEntries: Array<Record<string, unknown>>; otherError?: string; otherWrites: Array<Record<string, unknown>> }
+      let result = [...state.otherEntries]
+      let operation = 'read'
+      let payload: Record<string, unknown> = {}
+      let targetId = ''
+      const query = {
+        select: () => query,
+        gte: (key: string, value: string) => { result = result.filter(row => String(row[key]) >= value); return query },
+        lte: (key: string, value: string) => { result = result.filter(row => String(row[key]) <= value); return query },
+        order: () => query,
+        range: (from: number, to: number) => { result = result.slice(from, to + 1); return query },
+        eq: (key: string, value: string) => { targetId = value; result = result.filter(row => row[key] === value); return query },
+        update: (value: Record<string, unknown>) => { operation = 'update'; payload = value; return query },
+        insert: (value: Record<string, unknown>) => { operation = 'insert'; payload = value; return query },
+        delete: () => { operation = 'delete'; return query },
+        single: () => query,
+        then: (resolve: (value: unknown) => unknown) => {
+          if (state.otherError) return Promise.resolve({ data: null, error: { message: state.otherError } }).then(resolve)
+          if (operation === 'read') return Promise.resolve({ data: result, error: null }).then(resolve)
+          state.otherWrites.push({ operation, payload, id: targetId })
+          if (operation === 'insert') { const row = { ...payload, id: crypto.randomUUID() }; state.otherEntries.push(row); return Promise.resolve({ data: row, error: null }).then(resolve) }
+          const row = state.otherEntries.find(entry => entry.id === targetId)
+          if (operation === 'update' && row) Object.assign(row, payload)
+          if (operation === 'delete') state.otherEntries = state.otherEntries.filter(entry => entry.id !== targetId)
+          return Promise.resolve({ data: row || null, error: null }).then(resolve)
+        },
+      }
+      return query
+    }
     const data = (window as unknown as { salesFixture: Record<string, unknown[]> }).salesFixture[table] || []
     let result: unknown = data
     let patch: Record<string, unknown> | null = null

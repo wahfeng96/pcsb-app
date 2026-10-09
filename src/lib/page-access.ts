@@ -6,6 +6,7 @@ export const APP_PAGES = [
   { href: '/accounts', label: 'Accounts' },
   { href: '/sales-summary', label: 'Sales Summary' },
   { href: '/profit-loss', label: 'P&L' },
+  { href: '/other-profit-loss', label: 'Other P&L' },
   { href: '/profit-sharing', label: 'Profit Sharing' },
   { href: '/commission', label: 'Commission' },
   { href: '/users', label: 'Users' },
@@ -14,12 +15,12 @@ export const APP_PAGES = [
 
 export type AppPagePath = typeof APP_PAGES[number]['href']
 
-// P&L is intentionally excluded: every non-owner needs an explicit owner grant.
-export const DEFAULT_ALLOWED_PAGES = APP_PAGES.filter(page => page.href !== '/profit-loss').map(page => page.href)
+// Financial ledgers require an explicit owner grant for every non-owner.
+export const DEFAULT_ALLOWED_PAGES = APP_PAGES.filter(page => page.href !== '/profit-loss' && page.href !== '/other-profit-loss').map(page => page.href)
 
 export function canAccessPage(role: string | undefined, allowedPages: string[] | null | undefined, href: string) {
   if (role === 'owner') return true
-  if (href === '/profit-loss') return Array.isArray(allowedPages) && allowedPages.includes(href)
+  if (href === '/profit-loss' || href === '/other-profit-loss') return Array.isArray(allowedPages) && allowedPages.includes(href)
   // Null/undefined preserves full page access for existing users until customised.
   if (allowedPages == null) return true
   return allowedPages.includes(href)
