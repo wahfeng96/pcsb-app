@@ -14,8 +14,9 @@ CREATE FUNCTION public.can_edit_other_profit_loss()
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   SELECT EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'owner');
 $$;
-REVOKE ALL ON FUNCTION public.can_access_other_profit_loss() FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.can_edit_other_profit_loss() FROM PUBLIC;
+-- Supabase defaults can grant anon explicitly; revoke both inherited PUBLIC and direct anon access.
+REVOKE ALL ON FUNCTION public.can_access_other_profit_loss() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.can_edit_other_profit_loss() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.can_access_other_profit_loss() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.can_edit_other_profit_loss() TO authenticated;
 

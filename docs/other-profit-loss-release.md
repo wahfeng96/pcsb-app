@@ -16,7 +16,7 @@ Advertising P&L, Accounts, bookings, advertising cost categories and computation
 
 - Full Vitest suite: 99/99 passed, including 17 new ledger checks.
 - Chrome component tests: 10/10 passed (6 new ledger tests and 4 existing P&L regression tests). Tests cover CRUD, positive amount validation, literal script-looking text, loss/empty states, combined filters, read-only/denied users, recoverable load/write failures, >500 rows and mobile document width.
-- Synthetic PostgreSQL/PGlite: 33 checks passed for rollback dry-run, committed migration, initial empty ledger, unchanged synthetic existing rows, owner CRUD, explicit viewer reads, denied/unapproved/advertising-only users, anonymous denial, creator provenance, constraints and RLS.
+- Synthetic PostgreSQL/PGlite: 35 checks passed for rollback dry-run, committed migration, initial empty ledger, unchanged synthetic existing rows, owner CRUD, explicit viewer reads, denied/unapproved/advertising-only users, anonymous denial, creator provenance, constraints and RLS. The harness now reproduces Supabase's explicit default anon function grants and verifies both helpers reject anonymous calls.
 - Focused ESLint: clean.
 - Next production build: passed with synthetic public Supabase build values; generated `/other-profit-loss` successfully. Existing build config skips type/lint validation; these were checked separately.
 - Full TypeScript check: 11 existing errors, byte-identical to unchanged HEAD `ed0e9530f353ba4e4ac1d8d1231fb65032c13d12`; no new diagnostics. Baseline problems are in Clients, Commission, Profit Sharing, billboard-cost API and an older P&L test.
@@ -34,22 +34,16 @@ Private evidence: `/Users/canggih/.openclaw/workspace/main/output/other-pl-20261
 
 Migration: `supabase/migrations/20261009120000_other_profit_loss.sql`. Creates only the ledger table, index, new read/write helpers, four RLS policies and a metadata trigger, within a transaction with a 5-second lock timeout. No UPDATE/DELETE/backfill of existing business records.
 
-Linked migration history was read successfully. All previous local/remote versions match; version `20261009120000` is absent remotely. `supabase db push --linked --dry-run` succeeded and listed this as the sole pending migration. This CLI dry run verifies migration selection; the synthetic PostgreSQL rollback execution separately validates SQL. Production migration was NOT applied.
+Production schema verification completed on 9 October 2026 against linked MAIN project `sqryqwlevsgklctkxwok`. The resumed worker checked live migration history before any retry and found version `20261009120000` already applied. No duplicate migration execution was performed; exactly one history row exists.
 
-The established `supabase db dump --linked --file <private-output>/pre-migration-schema.sql` backup failed because the Docker daemon at `/var/run/docker.sock` is unavailable. No valid backup was created. Backup/readback are required by this request, so production migration and deployment remain blocked. No synthetic production writes were made. No push to main or Render deploy was performed.
+Private pre-migration schema/data backups were successfully created and their byte sizes and SHA-256 hashes match `backup-manifest.json`. The recorded production rollback dry run succeeded. Post-migration readback exactly matches the preflight baseline for all 19 existing public tables (2,269 rows, per-table checksums and RLS flags), 51 existing policies, 27 existing functions and 19 existing triggers. Existing profile data and permissions are unchanged.
 
-## Exact release actions after backup readiness is restored
+The new independent ledger contains zero rows, has RLS enabled, four authenticated policies, two indexes, three functions and one update trigger. Reads require owner or approved explicit page access; writes require owner. Anonymous table access is denied. Production's default function privileges explicitly granted anon access to the two new helpers despite the original PUBLIC revoke. A bounded transaction revoked only those new helper grants; the original migration source now explicitly revokes PUBLIC and anon to reproduce the verified live state. This reconciliation leaves the sole migration version unchanged. Focused synthetic PostgreSQL verification passed all 35 checks with the explicit default grants reproduced. No production test entries or other business data writes were made.
 
-1. Confirm MAIN project `sqryqwlevsgklctkxwok`, release commit and sole pending migration. Enable the operator-managed Docker backup path or use an owner-approved equivalent private logical backup. Do not proceed without a successful backup.
-2. From the canonical checkout, create private schema and data dumps. Preserve and hash both; they contain private business data and must never enter git:
+Private evidence: `release-schema-proof.json`, `post-migration-baseline.json`, `post-migration-schema.json`, `helper-privilege-correction.sql`, `helper-correction-result.json`, and `backup-manifest.json` in the output directory above. Backups and query results must never enter git.
 
-```sh
-supabase db dump --linked --file /Users/canggih/.openclaw/workspace/main/output/other-pl-20261009/pre-migration-schema.sql
-supabase db dump --linked --data-only --file /Users/canggih/.openclaw/workspace/main/output/other-pl-20261009/pre-migration-data.sql
-```
+## Application deployment
 
-3. Run the first two read-only queries in `supabase/audits/other_profit_loss.sql` in the authenticated MAIN SQL Editor and save baseline counts privately. Expect absent new objects and zero applied migration-history rows. Execute the committed migration with its final COMMIT replaced by ROLLBACK in SQL Editor; require success, then run `supabase db push --linked --dry-run` and require this to be the only pending migration.
-4. Apply the migration through `supabase db push --linked`. Run the entire read-only audit. Require unchanged existing-table counts, zero ledger rows, RLS enabled, four policies, one update trigger, both protected helpers, no anon read/helper access and exactly one migration-history row. Do not add production test entries.
-5. Only after schema/readback succeeds and deployment is authorized: merge or fast-forward `codex/other-profit-loss-20261009` into MAIN `main`, push main, then in the existing PCSB Render service choose **Manual Deploy → Deploy latest commit** if its GitHub auto-deploy does not start. Verify Render's deployed commit matches the release and owner `/other-profit-loss` loads with an empty ledger; use read-only smoke checks.
+The verified release can be fast-forwarded to MAIN `main` and pushed. Render deployment is owner-operated: in the existing PCSB service choose **Manual Deploy → Deploy latest commit**. No Render deployment is performed by this release worker. After deployment, verify the deployed commit matches main and the owner's `/other-profit-loss` opens with an empty ledger using read-only checks.
 
 Do not apply these files to DMDC or PLC.

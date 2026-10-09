@@ -12,6 +12,7 @@ await db.exec(`
   CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
   GRANT USAGE ON SCHEMA public, auth TO authenticated, anon;
   GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated, anon;
+  ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon, authenticated;
   CREATE TABLE public.profiles (id uuid PRIMARY KEY, role text, approved boolean, allowed_pages text[]);
   INSERT INTO public.profiles VALUES
     ('00000000-0000-0000-0000-000000000001','owner',true,NULL),
@@ -69,6 +70,8 @@ for (const id of [3,4,5]) {
 }
 await db.exec('RESET ROLE; SET ROLE anon')
 await rejects('SELECT * FROM public.other_profit_loss_entries', 'anonymous cannot read')
+await rejects('SELECT public.can_access_other_profit_loss()', 'anonymous cannot invoke read guard despite explicit default grant')
+await rejects('SELECT public.can_edit_other_profit_loss()', 'anonymous cannot invoke write guard despite explicit default grant')
 await identity(1)
 check((await db.query("DELETE FROM public.other_profit_loss_entries WHERE kind='expense' RETURNING id")).rows.length === 1, 'owner deletes')
 await db.exec('RESET ROLE')
