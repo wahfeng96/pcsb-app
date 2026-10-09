@@ -85,6 +85,43 @@ await db.exec('RESET ROLE; SET ROLE anon')
 await rejects('SELECT * FROM public.other_profit_loss_entries', 'anonymous cannot read')
 await rejects('SELECT public.can_access_other_profit_loss()', 'anonymous cannot invoke read guard despite explicit default grant')
 await rejects('SELECT public.can_edit_other_profit_loss()', 'anonymous cannot invoke write guard despite explicit default grant')
+await db.exec('RESET ROLE')
+const invoiceMigration = readFileSync(new URL('../supabase/migrations/20261009140000_other_expense_no_invoice.sql', import.meta.url), 'utf8')
+const ledgerBefore = (await db.query('SELECT * FROM public.other_profit_loss_entries ORDER BY id')).rows
+await db.exec(invoiceMigration.replace(/COMMIT;\s*$/, 'ROLLBACK;'))
+check((await db.query("SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name='other_profit_loss_entries' AND column_name='no_invoice'")).rows[0].n === 0, 'invoice rollback leaves no column')
+await db.exec(invoiceMigration)
+const ledgerAfter = (await db.query('SELECT * FROM public.other_profit_loss_entries ORDER BY id')).rows
+check(ledgerAfter.every(row => row.no_invoice === false), 'existing entries default false')
+check(JSON.stringify(ledgerAfter.map(({ no_invoice, ...row }) => row)) === JSON.stringify(ledgerBefore), 'all existing ledger values unchanged')
+const expenseId = ledgerAfter.find(row => row.kind === 'expense').id
+const incomeId = ledgerAfter.find(row => row.kind === 'income').id
+for (const id of [1, 2]) {
+  await identity(id)
+  check((await db.query(`SELECT public.set_other_expense_no_invoice('${expenseId}', true) AS flag`)).rows[0].flag === true, `authorized profile ${id} flags expense`)
+  check((await db.query(`SELECT public.set_other_expense_no_invoice('${expenseId}', false) AS flag`)).rows[0].flag === false, `authorized profile ${id} clears expense`)
+  await rejects(`SELECT public.set_other_expense_no_invoice('${incomeId}', true)`, 'RPC rejects income')
+  await rejects(`SELECT public.set_other_expense_no_invoice('${expenseId}', NULL)`, 'RPC rejects null')
+  await rejects("SELECT public.set_other_expense_no_invoice('00000000-0000-0000-0000-000000000099', true)", 'RPC rejects missing ID')
+}
+await identity(2)
+for (const patch of ["amount=999", "kind='income'", "entry_date='2025-01-01'", "description='changed'", "category='changed'", "no_invoice=true", "created_by=NULL", "created_at='2000-01-01'"]) {
+  check((await db.query(`UPDATE public.other_profit_loss_entries SET ${patch} RETURNING id`)).rows.length === 0, `viewer direct update denied: ${patch}`)
+}
+for (const id of [3, 4, 5]) {
+  await identity(id)
+  await rejects(`SELECT public.set_other_expense_no_invoice('${expenseId}', true)`, `invoice denied profile ${id}`)
+}
+await db.exec('RESET ROLE; SET ROLE anon')
+await rejects(`SELECT public.set_other_expense_no_invoice('${expenseId}', true)`, 'anon invoice RPC denied despite explicit default grants')
+await db.exec('RESET ROLE')
+check((await db.query("SELECT has_function_privilege('anon', 'public.set_other_expense_no_invoice(uuid,boolean)', 'EXECUTE') AS allowed")).rows[0].allowed === false, 'anon RPC privilege revoked')
+check(JSON.stringify((await db.query('SELECT * FROM public.other_profit_loss_entries ORDER BY id')).rows.map(({ no_invoice, updated_at, ...row }) => row)) === JSON.stringify(ledgerBefore.map(({ updated_at, ...row }) => row)), 'invoice RPC preserves financial details and provenance')
+await identity(1)
+await rejects(`UPDATE public.other_profit_loss_entries SET no_invoice=true WHERE id='${incomeId}'`, 'constraint rejects income flags for owner')
+await db.exec("INSERT INTO public.other_profit_loss_entries (entry_date,kind,description,amount) VALUES ('2026-01-01','expense','Invoice default batch',1), ('2026-02-01','expense','Invoice default batch',1)")
+check((await db.query("SELECT bool_and(no_invoice=false) AS defaults FROM public.other_profit_loss_entries WHERE description='Invoice default batch'")).rows[0].defaults, 'multi-month entries default false')
+await db.exec("DELETE FROM public.other_profit_loss_entries WHERE description='Invoice default batch'")
 await identity(1)
 check((await db.query("DELETE FROM public.other_profit_loss_entries WHERE kind='expense' RETURNING id")).rows.length === 1, 'owner deletes')
 await db.exec('RESET ROLE')

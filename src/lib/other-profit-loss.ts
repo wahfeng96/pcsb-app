@@ -4,9 +4,10 @@ export type OtherEntry = {
   kind: 'income' | 'expense'
   description: string
   category: string | null
+  no_invoice?: boolean
   amount: number | string
 }
-export type OtherDraft = Omit<OtherEntry, 'id' | 'amount'> & { amount: string }
+export type OtherDraft = Omit<OtherEntry, 'id' | 'amount' | 'no_invoice'> & { amount: string }
 
 // Preserve the day where possible; shorter months use their last valid day.
 // Arithmetic avoids timezone shifts and Date's special treatment of years 1–99.

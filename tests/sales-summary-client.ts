@@ -2,6 +2,15 @@
 export function createClient() {
   return {
     rpc(name: string, args?: Record<string, unknown>) {
+      if (name === 'set_other_expense_no_invoice') {
+        const state = window as unknown as { otherEntries: Array<Record<string, unknown>>; otherError?: string; otherWrites: Array<Record<string, unknown>> }
+        if (state.otherError) return Promise.resolve({ data: null, error: { message: state.otherError } })
+        const row = state.otherEntries.find(entry => entry.id === args?.p_entry_id && entry.kind === 'expense')
+        if (!row) return Promise.resolve({ data: null, error: { message: 'Expense not found' } })
+        row.no_invoice = args?.p_no_invoice
+        state.otherWrites.push({ name, args })
+        return Promise.resolve({ data: row.no_invoice, error: null })
+      }
       const fixture = (window as unknown as { profitLossFixture?: Record<string, unknown> }).profitLossFixture
       const writes = (window as unknown as { profitLossWrites?: Array<{ name: string; args?: Record<string, unknown> }> }).profitLossWrites
       if (name === 'get_profit_loss_data') return Promise.resolve({ data: fixture || null, error: null })
