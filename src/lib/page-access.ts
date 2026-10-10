@@ -29,3 +29,10 @@ export function canAccessPage(role: string | undefined, allowedPages: string[] |
 export function firstAllowedPage(role: string | undefined, allowedPages: string[] | null | undefined) {
   return APP_PAGES.find(page => canAccessPage(role, allowedPages, page.href))?.href || '/no-access'
 }
+
+export function canEditOtherProfitLoss(profile: { role?: string; approved?: boolean; allowed_pages?: string[] | null; can_edit_other_profit_loss?: boolean } | null | undefined) {
+  return profile?.role === 'owner' || (
+    profile?.approved === true && profile.can_edit_other_profit_loss === true &&
+    profile.allowed_pages?.includes('/other-profit-loss') === true
+  )
+}

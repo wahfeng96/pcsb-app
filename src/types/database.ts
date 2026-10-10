@@ -25,6 +25,7 @@ export interface Profile {
   approved: boolean
   allowed_pages: string[] | null
   can_edit_profit_loss: boolean
+  can_edit_other_profit_loss: boolean
   created_at: string
 }
 

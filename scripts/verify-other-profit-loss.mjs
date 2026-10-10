@@ -126,5 +126,68 @@ await identity(1)
 check((await db.query("DELETE FROM public.other_profit_loss_entries WHERE kind='expense' RETURNING id")).rows.length === 1, 'owner deletes')
 await db.exec('RESET ROLE')
 check(JSON.stringify((await db.query('SELECT * FROM public.profiles ORDER BY id')).rows) === JSON.stringify(before.rows), 'profiles remain unchanged after synthetic operations')
+// Exercise the separate editor permission using synthetic identities and finances only.
+await db.exec(`
+  ALTER TABLE public.profiles ADD COLUMN email text, ADD COLUMN can_edit_profit_loss boolean NOT NULL DEFAULT false;
+  CREATE TABLE auth.users (id uuid PRIMARY KEY, email text);
+  INSERT INTO public.profiles (id,role,approved,allowed_pages,email)
+    VALUES ('a4495656-bce4-41f6-9263-52269985afcf','partner',true,ARRAY['/other-profit-loss'],'seeleylee91@gmail.com');
+  INSERT INTO auth.users VALUES ('a4495656-bce4-41f6-9263-52269985afcf','seeleylee91@gmail.com');
+  GRANT SELECT, UPDATE ON public.profiles TO authenticated;
+  ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY synthetic_profile_read ON public.profiles FOR SELECT TO authenticated USING (true);
+  CREATE POLICY synthetic_profile_update ON public.profiles FOR UPDATE TO authenticated USING (id=auth.uid() OR EXISTS (SELECT 1 FROM public.profiles WHERE id=auth.uid() AND role='owner'));
+`)
+// Avoid recursive synthetic profile policy; production policies are inspected separately.
+await db.exec(`DROP POLICY synthetic_profile_update ON public.profiles;
+  CREATE FUNCTION public.synthetic_user_role() RETURNS text LANGUAGE sql SECURITY DEFINER SET search_path=public,pg_temp AS $$ SELECT role FROM public.profiles WHERE id=auth.uid() $$;
+  CREATE POLICY synthetic_profile_update ON public.profiles FOR UPDATE TO authenticated USING (id=auth.uid() OR public.synthetic_user_role()='owner') WITH CHECK (id=auth.uid() OR public.synthetic_user_role()='owner');`)
+const oldGuard = readFileSync(new URL('../supabase/migrations/20261003094000_profit_loss_editor_permission.sql', import.meta.url),'utf8').split('CREATE OR REPLACE FUNCTION public.protect_profile_access_fields()')[1].split('-- Explicitly approved')[0]
+await db.exec('CREATE OR REPLACE FUNCTION public.protect_profile_access_fields()'+oldGuard)
+await db.exec('CREATE TRIGGER profiles_protect_access_fields BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.protect_profile_access_fields();')
+const editorMigration = readFileSync(new URL('../supabase/migrations/20261010043000_other_profit_loss_editor_permission.sql', import.meta.url),'utf8')
+const profilesBeforeEditor = (await db.query('SELECT * FROM public.profiles ORDER BY id')).rows
+await db.exec(editorMigration.replace(/COMMIT;\s*$/, 'ROLLBACK;'))
+check((await db.query("SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name='profiles' AND column_name='can_edit_other_profit_loss'")).rows[0].n===0,'editor rollback leaves no column')
+await db.exec(editorMigration)
+const profilesAfterEditor = (await db.query('SELECT * FROM public.profiles ORDER BY id')).rows
+check(JSON.stringify(profilesAfterEditor.map(({can_edit_other_profit_loss,...row})=>row))===JSON.stringify(profilesBeforeEditor),'all prior profile fields preserved')
+check(profilesAfterEditor.filter(row=>row.can_edit_other_profit_loss).length===1,'only exact target granted')
+await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)",['a4495656-bce4-41f6-9263-52269985afcf'])
+await db.exec('SET ROLE authenticated')
+check((await db.query('SELECT public.can_edit_other_profit_loss() AS allowed')).rows[0].allowed,'approved partner editor guard passes')
+check((await db.query("UPDATE public.profiles SET can_edit_other_profit_loss=true WHERE id='00000000-0000-0000-0000-000000000002' RETURNING id")).rows.length===0,'editor cannot grant another user')
+await db.exec("INSERT INTO public.other_profit_loss_entries(entry_date,kind,description,amount) VALUES ('2026-01-01','income','Editor income',10),('2026-01-31','expense','Editor batch',5),('2026-02-28','expense','Editor batch',5)")
+check((await db.query("UPDATE public.other_profit_loss_entries SET amount=11 WHERE description='Editor income' RETURNING id")).rows.length===1,'editor updates income')
+check((await db.query("UPDATE public.other_profit_loss_entries SET amount=6 WHERE description='Editor batch' AND entry_date='2026-02-28' RETURNING id")).rows.length===1,'editor updates one batch month')
+const editorExpense=(await db.query("SELECT id FROM public.other_profit_loss_entries WHERE description='Editor batch' LIMIT 1")).rows[0].id
+check((await db.query(`SELECT public.set_other_expense_no_invoice('${editorExpense}',true) AS flag`)).rows[0].flag,'editor invoice RPC works')
+await rejects("INSERT INTO public.other_profit_loss_entries(entry_date,kind,description,amount) VALUES ('2026-01-01','expense','Invalid editor batch',1),('2026-02-01','expense','Invalid editor batch',0)",'editor invalid batch atomic')
+check((await db.query("SELECT count(*)::int AS n FROM public.other_profit_loss_entries WHERE description='Invalid editor batch'")).rows[0].n===0,'invalid editor batch leaves zero rows')
+check((await db.query("DELETE FROM public.other_profit_loss_entries WHERE description IN ('Editor income','Editor batch') RETURNING id")).rows.length===3,'editor deletes both kinds')
+for (const patch of ["can_edit_other_profit_loss=false","can_edit_profit_loss=true","role='owner'","approved=false","allowed_pages=ARRAY['/accounts']","email='other@example.test'"]) await rejects(`UPDATE public.profiles SET ${patch} WHERE id=auth.uid()`, `editor self-access change denied: ${patch}`)
+await identity(2)
+await rejects('UPDATE public.profiles SET can_edit_other_profit_loss=true WHERE id=auth.uid()','viewer cannot self-grant editor')
+check((await db.query('SELECT public.can_edit_other_profit_loss() AS allowed')).rows[0].allowed===false,'viewer remains financially read only')
+await rejects("INSERT INTO public.other_profit_loss_entries(entry_date,kind,description,amount) VALUES ('2026-01-01','income','Viewer after grant',1)",'viewer insert still denied')
+check((await db.query('UPDATE public.other_profit_loss_entries SET amount=999 RETURNING id')).rows.length===0,'viewer update still denied')
+check((await db.query('DELETE FROM public.other_profit_loss_entries RETURNING id')).rows.length===0,'viewer delete still denied')
+await db.exec('RESET ROLE')
+for (const patch of ["approved=false", "allowed_pages=ARRAY['/profit-loss']", "allowed_pages=NULL", "can_edit_other_profit_loss=false"]) {
+  await db.exec('BEGIN')
+  await db.exec(`UPDATE public.profiles SET ${patch} WHERE id='a4495656-bce4-41f6-9263-52269985afcf'`)
+  await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)",['a4495656-bce4-41f6-9263-52269985afcf'])
+  await db.exec('SET LOCAL ROLE authenticated')
+  check((await db.query('SELECT public.can_edit_other_profit_loss() AS allowed')).rows[0].allowed===false,`editor fail closed: ${patch}`)
+  await rejects("INSERT INTO public.other_profit_loss_entries(entry_date,kind,description,amount) VALUES ('2026-01-01','income','Denied editor',1)",`denied editor insert: ${patch}`)
+  await db.exec('ROLLBACK; RESET ROLE')
+}
+await identity(1)
+check((await db.query('SELECT public.can_edit_other_profit_loss() AS allowed')).rows[0].allowed,'owner retains editor rights without flag')
+check((await db.query("UPDATE public.profiles SET can_edit_other_profit_loss=true WHERE id='00000000-0000-0000-0000-000000000002' RETURNING id")).rows.length===1,'owner can grant explicit editor permission')
+await db.exec("UPDATE public.profiles SET can_edit_other_profit_loss=false WHERE id='00000000-0000-0000-0000-000000000002'")
+await db.exec('RESET ROLE; SET ROLE anon')
+await rejects('SELECT public.can_edit_other_profit_loss()','anon editor helper denied after replacement')
+await db.exec('RESET ROLE')
 console.log(`PASS: ${checks} synthetic PostgreSQL migration, constraint, CRUD and RLS checks`)
 await db.close()

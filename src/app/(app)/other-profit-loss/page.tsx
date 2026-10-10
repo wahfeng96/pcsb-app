@@ -19,7 +19,7 @@ const todayMYT = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kuala_
 
 export default function OtherProfitLossPage() {
   const supabase = useMemo(() => createClient(), [])
-  const { isOwner, profile, loading: profileLoading } = useRole()
+  const { isOwner, canEditOtherProfitLoss: canEdit, profile, loading: profileLoading } = useRole()
   const canView = isOwner || (profile?.approved === true && canAccessPage(profile.role, profile.allowed_pages, '/other-profit-loss'))
   const today = todayMYT()
   const [year, setYear] = useState(today.slice(0, 4))
@@ -88,7 +88,7 @@ export default function OtherProfitLossPage() {
   function selectYear(value: string) { setYear(value); setFrom(''); setTo('') }
 
   function openEntry(kind: 'income' | 'expense', entry?: OtherEntry) {
-    if (!isOwner) return
+    if (!canEdit) return
     setActionError('')
     setEditingId(entry?.id || null)
     setExpenseMonths([month === 'all' ? (year === today.slice(0, 4) ? today.slice(5, 7) : '01') : month])
@@ -100,7 +100,7 @@ export default function OtherProfitLossPage() {
   }
 
   async function save() {
-    if (!isOwner || !draft || saving) return
+    if (!canEdit || !draft || saving) return
     let batch: ReturnType<typeof buildOtherExpenses> | null = null
     try {
       if (newExpense) batch = buildOtherExpenses(draft, year, expenseMonths, expenseDay)
@@ -151,7 +151,7 @@ export default function OtherProfitLossPage() {
   }
 
   async function remove() {
-    if (!isOwner || !deleting || saving) return
+    if (!canEdit || !deleting || saving) return
     setSaving(true); setActionError('')
     try {
       const { data, error } = await supabase.from('other_profit_loss_entries').delete().eq('id', deleting.id).select('id').single()
@@ -168,9 +168,9 @@ export default function OtherProfitLossPage() {
   return <div className="p-4 md:p-6 space-y-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><h1 className="text-2xl font-bold">Other P&L</h1><p className="text-sm text-gray-500 mt-1">Manual non-advertising income and expenses · MYR</p></div>
-      {isOwner && <div className="flex gap-2"><Button onClick={() => openEntry('income')}><Plus className="h-4 w-4 mr-1" />Add Income</Button><Button variant="outline" onClick={() => openEntry('expense')}><Plus className="h-4 w-4 mr-1" />Add Expense</Button></div>}
+      {canEdit && <div className="flex gap-2"><Button onClick={() => openEntry('income')}><Plus className="h-4 w-4 mr-1" />Add Income</Button><Button variant="outline" onClick={() => openEntry('expense')}><Plus className="h-4 w-4 mr-1" />Add Expense</Button></div>}
     </div>
-    {!isOwner && <p className="text-sm text-gray-500">You can flag missing expense invoices. Entry details are managed by the owner.</p>}
+    {!canEdit && <p className="text-sm text-gray-500">You can flag missing expense invoices. Entry details require Other P&L editor access.</p>}
     <Card><CardContent className="pt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
       <div><Label htmlFor="other-year">Year</Label><div className="flex items-center rounded-md border bg-white p-1">
         <Button size="icon" variant="ghost" aria-label="Previous year" disabled={Number(year) <= 1} onClick={() => selectYear(String(Number(year) - 1).padStart(4, '0'))}><ChevronLeft className="h-4 w-4" /></Button>
@@ -207,7 +207,7 @@ export default function OtherProfitLossPage() {
       {month === 'all' && <Card><CardContent className="pt-5"><h2 className="font-semibold text-lg mb-1">Monthly summary · {year}</h2><p className="text-xs text-gray-500 mb-3">Full year, without date limits. Choose a month to view its entries.</p><div className="overflow-x-auto" tabIndex={0} aria-label="Monthly summary table"><table className="w-full min-w-[440px] text-sm"><thead><tr className="border-b text-left text-gray-500"><th className="py-2">Month</th><th className="text-right">Income</th><th className="text-right">Expenses</th><th className="text-right">Net Profit / Loss</th></tr></thead><tbody>{monthlyTotals.map(item => <tr key={item.month} className="border-b"><td><button className="py-2 text-red-600 hover:underline" aria-label={`View ${item.label} ${year}`} onClick={() => selectPeriod(item.month)}>{item.label}</button></td><td className="text-right">{money(item.income)}</td><td className="text-right">{money(item.expenses)}</td><td className={`text-right ${item.net < 0 ? 'text-red-600' : 'text-green-700'}`}>{money(item.net)}</td></tr>)}</tbody><tfoot><tr className="font-semibold"><td className="py-3">Overall</td><td className="text-right">{money(yearTotals.income)}</td><td className="text-right">{money(yearTotals.expenses)}</td><td className="text-right">{money(yearTotals.net)}</td></tr></tfoot></table></div></CardContent></Card>}
       {(['income', 'expense'] as const).map(kind => <Card key={kind}><CardContent className="pt-5">
         <h2 className="font-semibold text-lg mb-3">{kind === 'income' ? 'Income' : 'Expenses'}</h2>
-        {filtered.filter(entry => entry.kind === kind).length === 0 ? <p className="text-sm text-gray-500 py-4">No {kind === 'income' ? 'income' : 'expenses'} for this period.</p> : <div className="overflow-x-auto" tabIndex={0} aria-label={`${kind === 'income' ? 'Income' : 'Expenses'} entries table`}><table className="w-full text-sm min-w-[560px]"><thead><tr className="text-left text-gray-500 border-b"><th className="py-2 pr-3">Date</th><th className="pr-3">Description</th><th className="pr-3">Category</th><th className="text-right pr-3">Amount</th>{kind === 'expense' && <th className="pr-3">Invoice</th>}{isOwner && <th className="text-right">Actions</th>}</tr></thead><tbody>{filtered.filter(entry => entry.kind === kind).map(entry => <tr key={entry.id} className="border-b last:border-0"><td className="py-3 pr-3 whitespace-nowrap">{entry.entry_date}</td><td className="pr-3 break-words max-w-xs">{entry.description}</td><td className="pr-3 break-words max-w-40">{entry.category || '—'}</td><td className="text-right pr-3 whitespace-nowrap">{money(Number(entry.amount))}</td>{kind === 'expense' && <td className="pr-3 whitespace-nowrap"><Button size="sm" variant="outline" className={`min-h-11 bg-transparent ${entry.no_invoice ? 'border-red-600 bg-red-50 text-red-700 hover:bg-red-100' : ''}`} aria-label={`No invoice for ${entry.description}`} aria-pressed={Boolean(entry.no_invoice)} disabled={invoicePending.has(entry.id)} onClick={() => void toggleInvoice(entry)}>No invoice</Button></td>}{isOwner && <td className="text-right whitespace-nowrap"><Button size="sm" variant="ghost" aria-label={`Edit ${entry.description}`} onClick={() => openEntry(kind, entry)}><Pencil className="h-4 w-4" /></Button><Button size="sm" variant="ghost" aria-label={`Delete ${entry.description}`} onClick={() => { setActionError(''); setDeleting(entry) }}><Trash2 className="h-4 w-4 text-red-600" /></Button></td>}</tr>)}</tbody></table></div>}
+        {filtered.filter(entry => entry.kind === kind).length === 0 ? <p className="text-sm text-gray-500 py-4">No {kind === 'income' ? 'income' : 'expenses'} for this period.</p> : <div className="overflow-x-auto" tabIndex={0} aria-label={`${kind === 'income' ? 'Income' : 'Expenses'} entries table`}><table className="w-full text-sm min-w-[560px]"><thead><tr className="text-left text-gray-500 border-b"><th className="py-2 pr-3">Date</th><th className="pr-3">Description</th><th className="pr-3">Category</th><th className="text-right pr-3">Amount</th>{kind === 'expense' && <th className="pr-3">Invoice</th>}{canEdit && <th className="text-right">Actions</th>}</tr></thead><tbody>{filtered.filter(entry => entry.kind === kind).map(entry => <tr key={entry.id} className="border-b last:border-0"><td className="py-3 pr-3 whitespace-nowrap">{entry.entry_date}</td><td className="pr-3 break-words max-w-xs">{entry.description}</td><td className="pr-3 break-words max-w-40">{entry.category || '—'}</td><td className="text-right pr-3 whitespace-nowrap">{money(Number(entry.amount))}</td>{kind === 'expense' && <td className="pr-3 whitespace-nowrap"><Button size="sm" variant="outline" className={`min-h-11 bg-transparent ${entry.no_invoice ? 'border-red-600 bg-red-50 text-red-700 hover:bg-red-100' : ''}`} aria-label={`No invoice for ${entry.description}`} aria-pressed={Boolean(entry.no_invoice)} disabled={invoicePending.has(entry.id)} onClick={() => void toggleInvoice(entry)}>No invoice</Button></td>}{canEdit && <td className="text-right whitespace-nowrap"><Button size="sm" variant="ghost" aria-label={`Edit ${entry.description}`} onClick={() => openEntry(kind, entry)}><Pencil className="h-4 w-4" /></Button><Button size="sm" variant="ghost" aria-label={`Delete ${entry.description}`} onClick={() => { setActionError(''); setDeleting(entry) }}><Trash2 className="h-4 w-4 text-red-600" /></Button></td>}</tr>)}</tbody></table></div>}
       </CardContent></Card>)}
       </section>
     </>}

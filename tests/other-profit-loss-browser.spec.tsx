@@ -4,7 +4,7 @@ import OtherProfitLossPage from '../src/app/(app)/other-profit-loss/page'
 
 async function setup(page: { evaluate: (fn: (owner: boolean) => void, arg: boolean) => Promise<void> }, owner = true) {
   await page.evaluate(owner => {
-    Object.assign(window, { accountsCanEdit: owner, otherView: true, otherError: '', otherWrites: [], otherEntries: [
+    Object.assign(window, { accountsCanEdit: owner, otherEditor: false, otherView: true, otherError: '', otherWrites: [], otherEntries: [
       { id: 'one', entry_date: '2026-10-09', kind: 'income', description: '<script>literal text</script>', category: 'Other sales', amount: '100.10' },
       { id: 'two', entry_date: '2026-10-10', kind: 'expense', description: 'Manual supplies', category: null, amount: '30.20' },
       { id: 'three', entry_date: '2026-09-01', kind: 'income', description: 'September sale', category: null, amount: '200.00' },
@@ -244,3 +244,32 @@ for (const owner of [true, false]) {
     await page.screenshot({ path: `/Users/canggih/.openclaw/workspace/main/output/other-pl-invoice-20261009/toggle-${owner ? 'owner' : 'accountant'}-mobile.png`, fullPage: true })
   })
 }
+
+// Exercise CRUD using the explicit editor grant while global owner access is false.
+test('explicit Other P&L editor can add multi-month expenses, edit, delete and toggle invoice', async ({ mount, page }) => {
+  await setup(page, false)
+  await page.evaluate(() => Object.assign(window, { otherEditor: true }))
+  const component = await mount(<OtherProfitLossPage />)
+  await component.getByLabel('Year', { exact: true }).selectOption('2026')
+  await component.getByLabel('Month', { exact: true }).selectOption('10')
+  await component.getByRole('button', { name: 'Add Income', exact: true }).click()
+  await page.getByLabel('Description', { exact: true }).fill('Editor income')
+  await page.getByLabel('Amount (RM)', { exact: true }).fill('11')
+  await page.getByLabel('Date', { exact: true }).fill('2026-10-11')
+  await page.getByRole('button', { name: 'Save Entry' }).click()
+  await component.getByRole('button', { name: 'Edit Editor income', exact: true }).click()
+  await page.getByLabel('Amount (RM)', { exact: true }).fill('12')
+  await page.getByRole('button', { name: 'Save Entry' }).click()
+  await expect(component.getByText('RM 12.00', { exact: true })).toBeVisible()
+  await component.getByRole('button', { name: 'Delete Editor income', exact: true }).click()
+  await page.getByRole('button', { name: 'Delete Entry', exact: true }).click()
+  await expect(component.getByText('Editor income', { exact: true })).toHaveCount(0)
+  await component.getByRole('button', { name: 'No invoice for Manual supplies', exact: true }).click()
+  await expect(component.getByRole('button', { name: 'No invoice for Manual supplies', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await component.getByRole('button', { name: 'Add Expense', exact: true }).click()
+  await page.getByLabel('Description', { exact: true }).fill('Editor monthly expense')
+  await page.getByLabel('Amount per month (RM)', { exact: true }).fill('10')
+  for (const month of ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']) await page.getByRole('checkbox', { name: `Expense ${month}`, exact: true }).check()
+  await page.getByRole('button', { name: 'Save Entry' }).click()
+  await expect(component.getByText('Editor monthly expense', { exact: true })).toHaveCount(12)
+})

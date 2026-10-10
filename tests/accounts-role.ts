@@ -6,6 +6,7 @@ export function useRole() {
     profile: { role: 'team', approved: true, allowed_pages: (window as unknown as { otherView?: boolean }).otherView === false ? [] : ['/other-profit-loss'] },
     canEdit: accountsOwner,
     isOwner: accountsOwner || profitLossEditor,
+    canEditOtherProfitLoss: accountsOwner || Boolean((window as unknown as { otherEditor?: boolean; otherView?: boolean }).otherEditor && (window as unknown as { otherView?: boolean }).otherView !== false),
     canEditProfitLoss: accountsOwner || profitLossEditor,
   }
 }
