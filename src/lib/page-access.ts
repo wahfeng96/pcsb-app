@@ -19,6 +19,8 @@ export type AppPagePath = typeof APP_PAGES[number]['href']
 export const DEFAULT_ALLOWED_PAGES = APP_PAGES.filter(page => page.href !== '/profit-loss' && page.href !== '/other-profit-loss').map(page => page.href)
 
 export function canAccessPage(role: string | undefined, allowedPages: string[] | null | undefined, href: string) {
+  if (role === 'agency') return href === '/calendar'
+  if (!['owner', 'team', 'partner'].includes(role || '')) return false
   if (role === 'owner') return true
   if (href === '/profit-loss' || href === '/other-profit-loss') return Array.isArray(allowedPages) && allowedPages.includes(href)
   // Null/undefined preserves full page access for existing users until customised.
@@ -32,7 +34,7 @@ export function firstAllowedPage(role: string | undefined, allowedPages: string[
 
 export function canEditOtherProfitLoss(profile: { role?: string; approved?: boolean; allowed_pages?: string[] | null; can_edit_other_profit_loss?: boolean } | null | undefined) {
   return profile?.role === 'owner' || (
-    profile?.approved === true && profile.can_edit_other_profit_loss === true &&
+    (profile?.role === 'team' || profile?.role === 'partner') && profile.approved === true && profile.can_edit_other_profit_loss === true &&
     profile.allowed_pages?.includes('/other-profit-loss') === true
   )
 }

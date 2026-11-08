@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Users, Edit2, Eye, Trash2, Plus, X, Check, UserCheck, UserX, ShieldCheck, ShieldX } from 'lucide-react'
+import { Edit2, Trash2, Plus, X, Check, ShieldCheck, ShieldX } from 'lucide-react'
 import type { Profile, Billboard, UserRole } from '@/types/database'
 import { useRole } from '@/lib/hooks/use-role'
 import { APP_PAGES, DEFAULT_ALLOWED_PAGES } from '@/lib/page-access'
@@ -34,7 +34,7 @@ export default function UsersPage() {
   const [showCreateUser, setShowCreateUser] = useState(false)
   const [creatingUser, setCreatingUser] = useState(false)
   const [createError, setCreateError] = useState('')
-  const [createForm, setCreateForm] = useState({ name: '', email: '', password: '', role: 'team' as 'team' | 'partner' })
+  const [createForm, setCreateForm] = useState({ name: '', email: '', password: '', role: 'team' as 'team' | 'partner' | 'agency' })
   const [createPages, setCreatePages] = useState<string[]>(DEFAULT_ALLOWED_PAGES)
   const [createBillboards, setCreateBillboards] = useState<Record<string, 'view' | 'edit'>>({})
 
@@ -100,7 +100,9 @@ export default function UsersPage() {
   }
 
   async function updateRole(userId: string, role: UserRole) {
-    await supabase.from('profiles').update({ role }).eq('id', userId)
+    const { error } = await supabase.from('profiles').update({ role, ...(role === 'agency' ? { allowed_pages: ['/calendar'], can_edit_profit_loss: false, can_edit_other_profit_loss: false } : {}) }).eq('id', userId)
+    if (error) { alert('Failed to update role: ' + error.message); return }
+    setEditingUser(null)
     load()
   }
 
@@ -128,8 +130,9 @@ export default function UsersPage() {
       const current = prev[bbId]
       if (!current) return { ...prev, [bbId]: 'view' }
       if (current === 'view') return { ...prev, [bbId]: 'edit' }
-      const { [bbId]: _, ...rest } = prev
-      return rest
+      const next = { ...prev }
+      delete next[bbId]
+      return next
     })
   }
 
@@ -160,8 +163,9 @@ export default function UsersPage() {
       const level = current[bbId]
       if (!level) return { ...current, [bbId]: 'view' }
       if (level === 'view') return { ...current, [bbId]: 'edit' }
-      const { [bbId]: _, ...rest } = current
-      return rest
+      const next = { ...current }
+      delete next[bbId]
+      return next
     })
   }
 
@@ -206,9 +210,9 @@ export default function UsersPage() {
 
       <Card>
         <CardContent className="p-4">
-          <p className="text-xs text-gray-500">
+          <div className="text-xs text-gray-500">
             Tap a billboard to cycle: <span className="text-gray-400">None</span> → <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700">👁 View</Badge> → <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700">✏️ Edit</Badge> → None
-          </p>
+          </div>
         </CardContent>
       </Card>
 
@@ -246,8 +250,9 @@ export default function UsersPage() {
                       <option value="owner">Owner</option>
                       <option value="team">Team</option>
                       <option value="partner">Partner</option>
+                  <option value="agency">Agency</option>
                     </select>
-                    {user.role !== 'owner' && (!isEditing ? (
+                    {user.role !== 'owner' && user.role !== 'agency' && (!isEditing ? (
                       <Button size="sm" variant="outline" onClick={() => startEditAccess(user.id)}>
                         <Edit2 className="h-3 w-3 mr-1" /> Access
                       </Button>
@@ -291,6 +296,8 @@ export default function UsersPage() {
                         <Badge className="text-[10px] bg-red-100 text-red-700">All Pages (Owner)</Badge>
                         <Badge className="text-[10px] bg-red-100 text-red-700">All Billboards (Owner)</Badge>
                       </div>
+                    ) : user.role === 'agency' ? (
+                      <Badge className="text-[10px] bg-blue-100 text-blue-700">Calendar only · Read-only · Current/future months (Malaysia)</Badge>
                     ) : access.length === 0 ? (
                       <div className="space-y-1">
                         <p className="text-xs text-gray-500">Pages: {user.allowed_pages == null ? 'All pages' : `${user.allowed_pages.length} selected`}</p>
@@ -403,7 +410,7 @@ export default function UsersPage() {
       <Dialog open={showCreateUser} onOpenChange={setShowCreateUser}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Create Team Account</DialogTitle>
+            <DialogTitle>Create Account</DialogTitle>
           </DialogHeader>
           <form onSubmit={createUser} className="space-y-4">
             {createError && <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">{createError}</div>}
@@ -424,13 +431,15 @@ export default function UsersPage() {
               </div>
               <div>
                 <Label htmlFor="create-role">Role</Label>
-                <select id="create-role" className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm" value={createForm.role} onChange={e => setCreateForm(form => ({ ...form, role: e.target.value as 'team' | 'partner' }))}>
+                <select id="create-role" className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm" value={createForm.role} onChange={e => setCreateForm(form => ({ ...form, role: e.target.value as 'team' | 'partner' | 'agency' }))}>
                   <option value="team">Team</option>
                   <option value="partner">Partner</option>
+                  <option value="agency">Agency</option>
                 </select>
               </div>
             </div>
 
+            {createForm.role === 'agency' ? <p className="text-xs text-gray-500">Agency users can only view the calendar for current and future months (Malaysia time). All screens are visible; editing and financial/client details are unavailable.</p> : <>
             <div>
               <div className="flex items-center justify-between gap-2 mb-1.5">
                 <Label>Pages this user can see</Label>
@@ -466,6 +475,7 @@ export default function UsersPage() {
               </div>
             </div>
 
+            </>}
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setShowCreateUser(false)} disabled={creatingUser}>Cancel</Button>
               <Button type="submit" className="bg-red-600 hover:bg-red-700" disabled={creatingUser}>

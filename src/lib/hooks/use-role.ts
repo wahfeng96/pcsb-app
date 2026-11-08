@@ -10,11 +10,12 @@ export function useRole() {
     loading,
     isOwner: profile?.role === 'owner',
     isTeam: profile?.role === 'team',
+    isAgency: profile?.role === 'agency',
     isPartner: profile?.role === 'partner',
     canEdit: profile?.role === 'owner',  // Only owner can edit
     canEditOtherProfitLoss: canEditOtherProfitLoss(profile),
     canEditProfitLoss: profile?.role === 'owner' || (
-      profile?.approved === true &&
+      (profile?.role === 'team' || profile?.role === 'partner') && profile.approved === true &&
       profile?.can_edit_profit_loss === true &&
       profile?.allowed_pages?.includes('/profit-loss') === true
     ),

@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import { useProfile } from '@/lib/hooks/use-profile'
+import { malaysiaMonth, isAllowedAgencyMonth } from '@/lib/agency-access'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -18,15 +20,19 @@ import { CalendarBookingLabel } from '@/components/calendar/booking-label'
 import { calendarCampaignSuffix } from '@/lib/calendar-booking-label'
 import { OccupancyPopover } from '@/components/calendar/occupancy-popover'
 
-type BookingWithRefs = Booking & { client: Client; billboard: Billboard }
-type ContentChangeWithRefs = ContentChange & { billboard: Billboard }
+type CalendarBillboard = Pick<Billboard, 'id' | 'name' | 'location' | 'max_slots'>
+type BookingWithRefs = Pick<Booking, 'id' | 'billboard_id' | 'start_date' | 'end_date' | 'status' | 'spot_size' | 'brand_name' | 'campaign_name'> & { client?: Pick<Client, 'company_name'>; billboard: CalendarBillboard; start_event?: boolean; end_event?: boolean }
+type ContentChangeWithRefs = Pick<ContentChange, 'id' | 'brand_name' | 'billboard_id' | 'change_date'> & { billboard: CalendarBillboard; notes?: string | null }
 
 export default function CalendarPage() {
   const supabase = createClient()
+  const { profile, loading: profileLoading } = useProfile()
+  const isAgency = profile?.role === 'agency'
+  const [loadError, setLoadError] = useState('')
   const [bookings, setBookings] = useState<BookingWithRefs[]>([])
   const [contentChanges, setContentChanges] = useState<ContentChangeWithRefs[]>([])
-  const [billboards, setBillboards] = useState<Billboard[]>([])
-  const [currentMonth, setCurrentMonth] = useState(new Date())
+  const [billboards, setBillboards] = useState<CalendarBillboard[]>([])
+  const [currentMonth, setCurrentMonth] = useState(() => parseISO(`${malaysiaMonth()}-01`))
   const [selectedBillboard, setSelectedBillboard] = useState<string>('all')
   const [occupancyBillboard, setOccupancyBillboard] = useState<string>('')
   const [loading, setLoading] = useState(true)
@@ -34,8 +40,36 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [showContentDialog, setShowContentDialog] = useState(false)
   const [contentForm, setContentForm] = useState({ brand_name: '', billboard_id: '', notes: '' })
+  const dataMonth = isAgency ? format(currentMonth, 'yyyy-MM') : null
 
-  async function loadCalendarData() {
+  async function loadCalendarData(signal?: AbortSignal) {
+    if (!profile) return
+    if (isAgency) {
+      setLoading(true)
+      setLoadError('')
+      setBookings([])
+      setContentChanges([])
+      const month = format(currentMonth, 'yyyy-MM')
+      if (!isAllowedAgencyMonth(month)) {
+        setCurrentMonth(parseISO(`${malaysiaMonth()}-01`))
+        return
+      }
+      try {
+        const response = await fetch(`/api/agency-calendar?month=${month}`, { cache: 'no-store', signal })
+        const data = await response.json()
+        if (signal?.aborted) return
+        if (!response.ok) throw new Error(data.error || 'Calendar unavailable')
+        setBookings(data.bookings)
+        setBillboards(data.billboards)
+        setContentChanges(data.content_changes)
+        setOccupancyBillboard(current => current || data.billboards[0]?.id || '')
+      } catch (error) {
+        if (signal?.aborted) return
+        setLoadError(error instanceof Error ? error.message : 'Calendar unavailable')
+      }
+      if (!signal?.aborted) setLoading(false)
+      return
+    }
     const [bk, bb, cc] = await Promise.all([
       supabase.from('bookings').select('*, client:clients(*), billboard:billboards(*)').order('start_date'),
       supabase.from('billboards').select('*').order('name'),
@@ -49,8 +83,22 @@ export default function CalendarPage() {
   }
 
   useEffect(() => {
-    loadCalendarData()
-  }, [])
+    const controller = new AbortController()
+    loadCalendarData(controller.signal)
+    return () => controller.abort()
+  }, [profile?.id, profile?.role, dataMonth])
+
+  useEffect(() => {
+    if (!isAgency) return
+    const timer = window.setInterval(() => {
+      if (!isAllowedAgencyMonth(format(currentMonth, 'yyyy-MM'))) {
+        setBookings([])
+        setContentChanges([])
+        setCurrentMonth(parseISO(`${malaysiaMonth()}-01`))
+      }
+    }, 60_000)
+    return () => window.clearInterval(timer)
+  }, [isAgency, currentMonth])
 
   const monthStart = startOfMonth(currentMonth)
   const monthEnd = endOfMonth(currentMonth)
@@ -75,8 +123,8 @@ export default function CalendarPage() {
       if (computeBookingStatus(b.start_date, b.end_date, b.status) === 'cancelled') return
       const start = parseISO(b.start_date)
       const end = parseISO(b.end_date)
-      if (isSameDay(date, start)) events.push({ type: 'in', booking: b })
-      if (isSameDay(date, end)) events.push({ type: 'out', booking: b })
+      if (b.start_event !== false && isSameDay(date, start)) events.push({ type: 'in', booking: b })
+      if (b.end_event !== false && isSameDay(date, end)) events.push({ type: 'out', booking: b })
     })
     return events
   }
@@ -100,6 +148,7 @@ export default function CalendarPage() {
   }
 
   function openContentDialog(date: Date) {
+    if (isAgency || !profile) return
     setSelectedDate(date)
     setContentForm({
       brand_name: '',
@@ -110,6 +159,7 @@ export default function CalendarPage() {
   }
 
   async function saveContentChange() {
+    if (isAgency || !profile) return
     if (!selectedDate || !contentForm.brand_name.trim() || !contentForm.billboard_id) {
       alert('Please fill brand name and screen name')
       return
@@ -133,15 +183,18 @@ export default function CalendarPage() {
   }
 
   async function deleteContentChange(id: string) {
+    if (isAgency || !profile) return
     if (!confirm('Delete this content change marker?')) return
     await supabase.from('content_changes').delete().eq('id', id)
     await loadCalendarData()
   }
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600" /></div>
+  if (loading || profileLoading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600" /></div>
 
   return (
     <div className="space-y-4">
+      {loadError && <p role="alert" className="text-sm text-red-600">{loadError}</p>}
+      {isAgency && <p className="text-xs text-gray-500">Read-only · Current and future months (Malaysia time)</p>}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Calendar</h1>
         <div className="flex gap-2 text-xs">
@@ -154,9 +207,9 @@ export default function CalendarPage() {
 
       {/* Month navigation */}
       <div className="flex items-center justify-between">
-        <Button size="icon" variant="ghost" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}><ChevronLeft className="h-4 w-4" /></Button>
+        <Button aria-label="Previous month" disabled={isAgency && !isAllowedAgencyMonth(format(subMonths(currentMonth, 1), 'yyyy-MM'))} size="icon" variant="ghost" onClick={() => { const previous = subMonths(currentMonth, 1); if (!isAgency || isAllowedAgencyMonth(format(previous, 'yyyy-MM'))) setCurrentMonth(previous) }}><ChevronLeft className="h-4 w-4" /></Button>
         <h2 className="font-semibold">{format(currentMonth, 'MMMM yyyy')}</h2>
-        <Button size="icon" variant="ghost" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}><ChevronRight className="h-4 w-4" /></Button>
+        <Button aria-label="Next month" size="icon" variant="ghost" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}><ChevronRight className="h-4 w-4" /></Button>
       </div>
 
       {/* Billboard filter */}
@@ -188,18 +241,19 @@ export default function CalendarPage() {
                     type="button"
                     onClick={() => openContentDialog(day)}
                     className={`text-xs font-medium hover:text-blue-600 ${isToday(day) ? 'text-red-600 font-bold' : 'text-gray-700'}`}
-                    title="Click to add content change"
+                    disabled={isAgency}
+                    title={isAgency ? undefined : "Click to add content change"}
                   >
                     {format(day, 'd')}
                   </button>
-                  <button
+                  {!isAgency && <button
                     type="button"
                     onClick={() => openContentDialog(day)}
                     className="hidden group-hover:flex h-4 w-4 items-center justify-center rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100"
                     title="Add content change"
                   >
                     <Plus className="h-3 w-3" />
-                  </button>
+                  </button>}
                 </div>
                 <div className="space-y-px mt-px">
                   {events.slice(0, 3).map((ev, i) => (
@@ -220,14 +274,14 @@ export default function CalendarPage() {
                       className="group/change flex items-center gap-1 text-[8px] md:text-[10px] px-1 rounded truncate text-white font-medium bg-blue-500 cursor-default w-full"
                     >
                       <span className="truncate flex-1">{change.brand_name}</span>
-                      <button
+                      {!isAgency && <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); deleteContentChange(change.id) }}
                         className="hidden group-hover/change:block text-white/80 hover:text-white"
                         title="Delete"
                       >
                         <X className="h-2.5 w-2.5" />
-                      </button>
+                      </button>}
                     </div>
                   ))}
                   {allEntries > 3 && (
@@ -332,8 +386,8 @@ export default function CalendarPage() {
             .filter(b => computeBookingStatus(b.start_date, b.end_date, b.status) !== 'cancelled')
             .flatMap(b => {
               const events: { date: string; type: 'in' | 'out'; booking: BookingWithRefs }[] = []
-              events.push({ date: b.start_date, type: 'in', booking: b })
-              events.push({ date: b.end_date, type: 'out', booking: b })
+              if (b.start_event !== false) events.push({ date: b.start_date, type: 'in', booking: b })
+              if (b.end_event !== false) events.push({ date: b.end_date, type: 'out', booking: b })
               return events
             })
             .filter(ev => parseISO(ev.date) >= new Date(new Date().setHours(0,0,0,0)))
@@ -358,7 +412,7 @@ export default function CalendarPage() {
             ))
           }
           {filteredBookings.length === 0 && (
-            <Card><CardContent className="p-4 text-center text-gray-500 text-sm">No bookings yet. Add clients and bookings to see them here.</CardContent></Card>
+            <Card><CardContent className="p-4 text-center text-gray-500 text-sm">{isAgency ? 'No bookings in this month.' : 'No bookings yet. Add clients and bookings to see them here.'}</CardContent></Card>
           )}
         </div>
       </div>
@@ -384,20 +438,20 @@ export default function CalendarPage() {
                       <Badge className="text-[10px] bg-blue-100 text-blue-700">🔵 CHANGE</Badge>
                       <p className="text-xs text-gray-500 mt-1">{format(parseISO(change.change_date), 'dd MMM yyyy')}</p>
                     </div>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-gray-400 hover:text-red-600" onClick={() => deleteContentChange(change.id)}>
+                    {!isAgency && <Button size="icon" variant="ghost" className="h-8 w-8 text-gray-400 hover:text-red-600" onClick={() => deleteContentChange(change.id)}>
                       <Trash2 className="h-4 w-4" />
-                    </Button>
+                    </Button>}
                   </div>
                 </CardContent>
               </Card>
             ))}
           {filteredContentChanges.length === 0 && (
-            <Card><CardContent className="p-4 text-center text-gray-500 text-sm">No content changes yet. Click a date to add blue content change marker.</CardContent></Card>
+            <Card><CardContent className="p-4 text-center text-gray-500 text-sm">{isAgency ? 'No content changes in this month.' : 'No content changes yet. Click a date to add blue content change marker.'}</CardContent></Card>
           )}
         </div>
       </div>
 
-      <Dialog open={showContentDialog} onOpenChange={setShowContentDialog}>
+      <Dialog open={!isAgency && showContentDialog} onOpenChange={setShowContentDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Content Change {selectedDate ? `— ${format(selectedDate, 'dd MMM yyyy')}` : ''}</DialogTitle>

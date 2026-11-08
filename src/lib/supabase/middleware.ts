@@ -1,5 +1,6 @@
-import { createServerClient } from '@supabase/ssr'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { agencyCanRequest } from '@/lib/agency-access'
 import { APP_PAGES, canAccessPage, firstAllowedPage } from '@/lib/page-access'
 
 export async function updateSession(request: NextRequest) {
@@ -13,12 +14,12 @@ export async function updateSession(request: NextRequest) {
         get(name: string) {
           return request.cookies.get(name)?.value
         },
-        set(name: string, value: string, options: any) {
+        set(name: string, value: string, options: CookieOptions) {
           request.cookies.set({ name, value, ...options })
           response = NextResponse.next({ request: { headers: request.headers } })
           response.cookies.set({ name, value, ...options })
         },
-        remove(name: string, options: any) {
+        remove(name: string, options: CookieOptions) {
           request.cookies.set({ name, value: '', ...options })
           response = NextResponse.next({ request: { headers: request.headers } })
           response.cookies.set({ name, value: '', ...options })
@@ -34,6 +35,22 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     return NextResponse.redirect(url)
+  }
+
+  if (user) {
+    const { data: agencyProfile } = await supabase.from('profiles').select('role, approved').eq('id', user.id).single()
+    if (agencyProfile?.role === 'agency') {
+      const path = request.nextUrl.pathname
+      if (!['GET', 'HEAD'].includes(request.method) || (path.startsWith('/api/') && (!agencyProfile.approved || !agencyCanRequest(path, request.method)))) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+      if (agencyProfile.approved && !agencyCanRequest(path, request.method) && path !== '/auth/login') {
+        const url = request.nextUrl.clone()
+        url.pathname = '/calendar'
+        url.search = ''
+        return NextResponse.redirect(url)
+      }
+    }
   }
 
   // Redirect authenticated users away from auth pages

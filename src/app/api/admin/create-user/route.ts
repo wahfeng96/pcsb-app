@@ -11,7 +11,10 @@ export async function POST(request: Request) {
   const name = typeof body.name === 'string' ? body.name.trim() : ''
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
   const password = typeof body.password === 'string' ? body.password : ''
-  const role = body.role === 'partner' ? 'partner' : 'team'
+  if (!['team', 'partner', 'agency'].includes(body.role)) {
+    return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
+  }
+  const role = body.role as 'team' | 'partner' | 'agency'
   const validPages = new Set<string>(APP_PAGES.map(page => page.href))
   const allowedPages = Array.isArray(body.allowed_pages)
     ? [...new Set<string>(body.allowed_pages.filter((page: unknown): page is string => typeof page === 'string' && validPages.has(page)))]
@@ -79,7 +82,9 @@ export async function POST(request: Request) {
     name,
     role,
     approved: true,
-    allowed_pages: allowedPages,
+    allowed_pages: role === 'agency' ? ['/calendar'] : allowedPages,
+    can_edit_profit_loss: false,
+    can_edit_other_profit_loss: false,
   }, { onConflict: 'id' })
 
   if (profileError) {
@@ -87,7 +92,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: profileError.message }, { status: 500 })
   }
 
-  if (safeBillboardAccess.length > 0) {
+  if (role !== 'agency' && safeBillboardAccess.length > 0) {
     const { error: accessError } = await adminClient.from('user_billboard_access').insert(
       safeBillboardAccess.map(access => ({ user_id: userId, ...access }))
     )

@@ -1,4 +1,4 @@
-export type UserRole = 'owner' | 'team' | 'partner'
+export type UserRole = 'owner' | 'team' | 'partner' | 'agency'
 export type ClientStage = 'inquiry' | 'quotation' | 'bo' | 'scheduled' | 'live' | 'completed' | 'cancelled'
 export type BookingStatus = 'upcoming' | 'live' | 'completed' | 'cancelled'
 export type PaymentStatus = 'pending_payment' | 'received_pending_profit_share' | 'settled'

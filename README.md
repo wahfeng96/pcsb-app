@@ -3,7 +3,7 @@
 Billboard management system for Penjenamaan Canggih Sdn Bhd (PCSB).
 
 ## Features (Phase 1)
-- **Auth** — Email/password login with role-based access (owner/team/partner)
+- **Auth** — Email/password login with role-based access (owner/team/partner/agency)
 - **Dashboard** — Billboard occupancy, active bookings, pending payments, upcoming events
 - **Calendar** — Monthly view + Billboard view with color-coded bookings
 - **Clients** — CRUD with pipeline stages (Inquiry → Quotation → BO → Scheduled → Live → Completed)
@@ -58,6 +58,9 @@ Set the environment variables in Vercel dashboard.
 | Owner | ✅ | ✅ | ✅ | ✅ | Full CRUD |
 | Team | ✅ | ✅ | View | View | Calendar only |
 | Partner | — | — | Assigned only | Assigned only | View only |
+| Agency | — | Current/future months (Malaysia) | — | Calendar screens only | Read-only |
+
+Agency requires `supabase/migrations/20261108131000_agency_calendar_access.sql` and the matching application release. See [Agency authorization and release instructions](docs/agency-calendar-access.md) before enabling the role.
 
 ## Database Schema
 See `supabase/schema.sql` for the full schema with RLS policies.

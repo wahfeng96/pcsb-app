@@ -1,3 +1,4 @@
+import { authenticatedCaller } from '@/lib/api-auth'
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -10,7 +11,7 @@ function getAdmin() {
 }
 
 // Verify user can edit: owner can edit all, team needs can_edit access on that billboard
-async function canEditCosts(supabase: ReturnType<typeof createClient>, userId: string, billboardId?: string) {
+async function canEditCosts(supabase: ReturnType<typeof getAdmin>, userId: string, billboardId?: string) {
   const { data: profile } = await supabase
     .from('profiles')
     .select('role')
@@ -38,7 +39,11 @@ function toDate(month: string | null): string | null {
 
 // POST = add new cost
 export async function POST(req: NextRequest) {
-  const { userId, billboard_id, name, amount, start_month, end_month } = await req.json()
+  const caller = await authenticatedCaller()
+  if (!caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!['owner', 'team', 'partner'].includes(caller.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const userId = caller.id
+  const { billboard_id, name, amount, start_month, end_month } = await req.json()
   if (!userId || !billboard_id || !name) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
@@ -62,7 +67,11 @@ export async function POST(req: NextRequest) {
 
 // PUT = update existing cost
 export async function PUT(req: NextRequest) {
-  const { userId, id, name, amount, start_month, end_month } = await req.json()
+  const caller = await authenticatedCaller()
+  if (!caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!['owner', 'team', 'partner'].includes(caller.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const userId = caller.id
+  const { id, name, amount, start_month, end_month } = await req.json()
   if (!userId || !id) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
@@ -89,7 +98,11 @@ export async function PUT(req: NextRequest) {
 
 // DELETE = remove cost
 export async function DELETE(req: NextRequest) {
-  const { userId, id } = await req.json()
+  const caller = await authenticatedCaller()
+  if (!caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!['owner', 'team', 'partner'].includes(caller.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const userId = caller.id
+  const { id } = await req.json()
   if (!userId || !id) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
