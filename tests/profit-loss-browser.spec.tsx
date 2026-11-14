@@ -39,6 +39,45 @@ function fixtureScript(owner: boolean) {
 }
 
 for (const mobile of [false, true]) {
+  test(`month cards select details without writes ${mobile ? 'mobile' : 'desktop'}`, async ({ mount, page }) => {
+    await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 })
+    await page.evaluate(fixtureScript, true)
+    await mount(<ProfitLossPage />)
+    const monthFilter = page.getByLabel('Month', { exact: true })
+    const yearFilter = page.getByLabel('Year', { exact: true })
+    const initialMonth = await monthFilter.inputValue()
+    const year = await yearFilter.inputValue()
+    const initialLabel = new Date(`${year}-${initialMonth}-01T00:00:00Z`).toLocaleString('en', { month: 'short', timeZone: 'UTC' })
+    const emptyMonth = initialMonth === '01' ? '02' : '01'
+    const emptyLabel = emptyMonth === '01' ? 'Jan' : 'Feb'
+    await page.getByRole('button', { name: 'Likas', exact: true }).click()
+    await page.getByLabel('Search revenue', { exact: true }).fill('Synthetic Client A')
+    const emptyButton = page.getByRole('button', { name: `Show ${emptyLabel} ${year}`, exact: true })
+    await emptyButton.click()
+    await expect(monthFilter).toHaveValue(emptyMonth)
+    await expect(emptyButton).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByLabel('Search revenue', { exact: true })).toHaveValue('')
+    await expect(page.getByText('Synthetic Client A', { exact: true })).toHaveCount(0)
+    await expect(page.getByText('Synthetic electricity', { exact: true })).toHaveCount(0)
+    await expect(page.getByLabel('P&L summary').getByText('RM 0.00', { exact: true })).toHaveCount(3)
+    const initialButton = page.getByRole('button', { name: `Show ${initialLabel} ${year}`, exact: true })
+    await initialButton.focus()
+    await initialButton.press('Enter')
+    await expect(monthFilter).toHaveValue(initialMonth)
+    await expect(initialButton).toHaveAttribute('aria-pressed', 'true')
+    await expect(emptyButton).toHaveAttribute('aria-pressed', 'false')
+    await expect(page.getByText('Synthetic Client A', { exact: true })).toBeVisible()
+    await expect(page.getByText('Synthetic electricity', { exact: true })).toBeVisible()
+    await expect(page.getByLabel('P&L summary').getByText('RM 400.00', { exact: true })).toBeVisible()
+    await expect(yearFilter).toHaveValue(year)
+    await expect(page.getByRole('button', { name: 'Likas', exact: true })).toHaveClass(/bg-red-600/)
+    await monthFilter.selectOption('unknown')
+    await expect(initialButton).toHaveAttribute('aria-pressed', 'false')
+    await expect(page.getByTestId('month-drop-unknown')).toHaveAttribute('aria-pressed', 'true')
+    expect(await page.evaluate(() => (window as unknown as { profitLossWrites: unknown[] }).profitLossWrites)).toEqual([])
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  })
+
   test(`P&L filters, paid revenue, allocations and responsive layout ${mobile ? 'mobile' : 'desktop'}`, async ({ mount, page }) => {
     await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 })
     await page.evaluate(fixtureScript, true)
@@ -134,6 +173,18 @@ for (const mobile of [false, true]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   })
 }
+
+test('dropping revenue on a month card keeps the viewed month', async ({ mount, page }) => {
+  await page.evaluate(fixtureScript, true)
+  await mount(<ProfitLossPage />)
+  const initialMonth = await page.getByLabel('Month', { exact: true }).inputValue()
+  const year = await page.getByLabel('Year', { exact: true }).inputValue()
+  const targetMonth = initialMonth === '01' ? '02' : '01'
+  await page.getByTestId('revenue-payment:paid-a').dragTo(page.getByTestId(`month-drop-${year}-${targetMonth}`))
+  await expect.poll(() => page.evaluate(() => (window as unknown as { profitLossWrites: Array<{ name: string }> }).profitLossWrites.map(write => write.name))).toEqual(['assign_profit_loss_revenue'])
+  await expect(page.getByLabel('Month', { exact: true })).toHaveValue(initialMonth)
+  await expect(page.getByText('Synthetic Client A', { exact: true })).toHaveCount(0)
+})
 
 test('P&L granted viewer has no accounting mutation controls', async ({ mount, page }) => {
   await page.setViewportSize({ width: 1024, height: 900 })

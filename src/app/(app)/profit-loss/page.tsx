@@ -448,10 +448,19 @@ export default function ProfitLossPage() {
                   data-testid={`month-drop-${target}`}
                   onDragOver={event => { if (draggingRevenue && !locked) event.preventDefault() }}
                   onDrop={event => { event.preventDefault(); if (draggingRevenue && !locked) assignRevenue(draggingRevenue, target) }}
-                  className={`min-w-[76px] rounded-md border px-2 py-2 text-center text-xs ${draggingRevenue ? 'border-red-300 bg-red-50' : 'bg-white'} ${month === monthValue ? 'ring-1 ring-red-500' : ''}`}
+                  className={`relative min-w-[76px] rounded-md border text-center text-xs ${draggingRevenue ? 'border-red-300 bg-red-50' : 'bg-white'} ${month === monthValue ? 'ring-1 ring-red-500' : ''}`}
                 >
-                  <div className="flex items-center justify-center gap-1"><p className="font-medium">{label}</p><button type="button" disabled={saving} className="rounded p-0.5 text-gray-600 hover:bg-gray-100" aria-label={`${locked ? 'Unlock' : 'Lock'} ${label} ${year}`} title={`${locked ? 'Unlock' : 'Lock'} ${label} ${year}`} onClick={() => locked ? (setUnlockMonth(target), setUnlockCode(''), setActionError('')) : void lockMonth(target)}>{locked ? <Lock className="h-3.5 w-3.5" /> : <LockOpen className="h-3.5 w-3.5" />}</button></div>
-                  <p className="text-[10px] text-gray-500">{revenueForPeriod(data.revenue, year, monthValue, billboardId).length} paid</p>
+                  <button
+                    type="button"
+                    aria-label={`Show ${label} ${year}`}
+                    aria-pressed={month === monthValue}
+                    onClick={() => { if (!draggingRevenue) { setMonth(monthValue); setRevenueSearch('') } }}
+                    className="h-full w-full rounded-md px-2 py-2 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-600"
+                  >
+                    <span className="block pr-4 font-medium">{label}</span>
+                    <span className="block text-[10px] text-gray-500">{revenueForPeriod(data.revenue, year, monthValue, billboardId).length} paid</span>
+                  </button>
+                  <button type="button" disabled={saving} className="absolute right-1 top-2 rounded p-0.5 text-gray-600 hover:bg-gray-100" aria-label={`${locked ? 'Unlock' : 'Lock'} ${label} ${year}`} title={`${locked ? 'Unlock' : 'Lock'} ${label} ${year}`} onClick={() => locked ? (setUnlockMonth(target), setUnlockCode(''), setActionError('')) : void lockMonth(target)}>{locked ? <Lock className="h-3.5 w-3.5" /> : <LockOpen className="h-3.5 w-3.5" />}</button>
                 </div>
               )
             })}
@@ -460,7 +469,8 @@ export default function ProfitLossPage() {
               data-testid="month-drop-unknown"
               onDragOver={event => { if (draggingRevenue) event.preventDefault() }}
               onDrop={event => { event.preventDefault(); if (draggingRevenue) assignRevenue(draggingRevenue, UNKNOWN_REVENUE_MONTH) }}
-              onClick={() => setMonth(UNKNOWN_REVENUE_MONTH)}
+              aria-pressed={month === UNKNOWN_REVENUE_MONTH}
+              onClick={() => { if (!draggingRevenue) { setMonth(UNKNOWN_REVENUE_MONTH); setRevenueSearch('') } }}
               className={`min-w-[88px] rounded-md border border-amber-300 px-2 py-2 text-center text-xs ${draggingRevenue ? 'bg-amber-100 ring-1 ring-amber-500' : 'bg-amber-50'} ${month === UNKNOWN_REVENUE_MONTH ? 'ring-1 ring-amber-600' : ''}`}
             >
               <span className="font-medium text-amber-900">Unknown {year}</span>
