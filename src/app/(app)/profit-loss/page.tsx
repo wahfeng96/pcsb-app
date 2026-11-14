@@ -34,6 +34,8 @@ const MONTHS = [
   ['07', 'Jul'], ['08', 'Aug'], ['09', 'Sep'], ['10', 'Oct'], ['11', 'Nov'], ['12', 'Dec'],
 ] as const
 
+const GENERAL_ALLOCATION = 'general'
+
 type AllocationDraft = { billboard_id: string; amount: string }
 type CostDraft = {
   id: string | null
@@ -131,6 +133,7 @@ export default function ProfitLossPage() {
   const allocationDraftTotal = allocationTotal(costDraft.allocations.map(item => ({ amount: Number(item.amount) || 0 })))
   const draftAmount = Number(costDraft.amount)
   const validAllocations = allocationsMatchTotal(draftAmount, costDraft.allocations.map(item => ({ amount: Number(item.amount) || 0 })))
+  const missingAllocationDestination = costDraft.allocations.some(item => !item.billboard_id)
   const duplicateAllocations = new Set(costDraft.allocations.map(item => item.billboard_id)).size !== costDraft.allocations.length
   const selectedMonthKey = /^\d{2}$/.test(month) ? `${year}-${month}` : null
   const draftCostYear = costDraft.cost_date.slice(0, 4)
@@ -225,7 +228,7 @@ export default function ProfitLossPage() {
       amount: String(cost.amount),
       remarks: cost.remarks || '',
       reporting_months: reportingMonths,
-      allocations: cost.allocations.map(allocation => ({ billboard_id: allocation.billboard_id || '', amount: String(allocation.amount) })),
+      allocations: cost.allocations.map(allocation => ({ billboard_id: allocation.billboard_id ?? GENERAL_ALLOCATION, amount: String(allocation.amount) })),
     })
     setActionError('')
     setCostOpen(true)
@@ -275,7 +278,7 @@ export default function ProfitLossPage() {
 
   async function saveCost(event: React.FormEvent) {
     event.preventDefault()
-    if (!canEditProfitLoss || !validAllocations || duplicateAllocations || !costDraft.category_id || draftReportingMonths.length === 0 || draftHasLockedMonth) return
+    if (!canEditProfitLoss || missingAllocationDestination || !validAllocations || duplicateAllocations || !costDraft.category_id || draftReportingMonths.length === 0 || draftHasLockedMonth) return
     setSaving(true)
     setActionError('')
     const { error } = await supabase.rpc('save_profit_loss_cost', {
@@ -287,7 +290,7 @@ export default function ProfitLossPage() {
       p_amount: draftAmount,
       p_remarks: costDraft.remarks || null,
       p_reporting_months: draftReportingMonths.map(monthStart),
-      p_allocations: costDraft.allocations.map(allocation => ({ billboard_id: allocation.billboard_id || null, amount: Number(allocation.amount) })),
+      p_allocations: costDraft.allocations.map(allocation => ({ billboard_id: allocation.billboard_id === GENERAL_ALLOCATION ? null : allocation.billboard_id, amount: Number(allocation.amount) })),
     })
     if (error) {
       setActionError(error.message)
@@ -572,15 +575,16 @@ export default function ProfitLossPage() {
               <div className="flex items-center justify-between gap-2"><Label>Billboard Allocation</Label><Button type="button" size="sm" variant="outline" onClick={() => setCostDraft(current => ({ ...current, allocations: [...current.allocations, { billboard_id: '', amount: '' }] }))}><Plus className="mr-1 h-3 w-3" /> Split</Button></div>
               {costDraft.allocations.map((allocation, index) => (
                 <div key={index} className="grid grid-cols-[1fr_120px_36px] gap-2">
-                  <select aria-label={`Allocation ${index + 1} destination`} value={allocation.billboard_id} onChange={event => updateAllocation(index, { billboard_id: event.target.value })} className="h-10 rounded-md border border-gray-300 bg-white px-3 text-sm"><option value="">General / Company Overhead</option>{data.billboards.map(billboard => <option key={billboard.id} value={billboard.id}>{billboard.name}</option>)}</select>
+                  <select required aria-invalid={!allocation.billboard_id} aria-describedby={!allocation.billboard_id ? "allocation-destination-error" : undefined} aria-label={`Allocation ${index + 1} destination`} value={allocation.billboard_id} onChange={event => updateAllocation(index, { billboard_id: event.target.value })} className="h-10 rounded-md border border-gray-300 bg-white px-3 text-sm"><option value="" disabled>Choose billboard / allocation</option><option value={GENERAL_ALLOCATION}>General / Company Overhead</option>{data.billboards.map(billboard => <option key={billboard.id} value={billboard.id}>{billboard.name}</option>)}</select>
                   <Input aria-label={`Allocation ${index + 1} amount`} type="number" required min="0.01" step="0.01" value={allocation.amount} onChange={event => updateAllocation(index, { amount: event.target.value })} />
                   <Button type="button" size="icon" variant="ghost" aria-label={`Remove allocation ${index + 1}`} disabled={costDraft.allocations.length === 1} onClick={() => setCostDraft(current => ({ ...current, allocations: current.allocations.filter((_, allocationIndex) => allocationIndex !== index) }))}><X className="h-4 w-4" /></Button>
                 </div>
               ))}
+              {missingAllocationDestination && <p id="allocation-destination-error" role="alert" className="text-xs text-red-700">Choose a billboard or General / Company Overhead for every allocation.</p>}
               <div className={`flex justify-between rounded-md px-3 py-2 text-xs ${validAllocations && !duplicateAllocations ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700'}`}><span>Allocated {money(allocationDraftTotal)} of {money(draftAmount || 0)}</span><span>{duplicateAllocations ? 'Each destination can appear once' : validAllocations ? 'Balanced' : 'Must match exactly'}</span></div>
             </div>
             {actionError && <p role="alert" className="text-sm text-red-700">{actionError}</p>}
-            <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setCostOpen(false)}>Cancel</Button><Button type="submit" className="bg-red-600 hover:bg-red-700" disabled={saving || !validAllocations || duplicateAllocations || draftReportingMonths.length === 0 || draftHasLockedMonth}>{saving ? 'Saving...' : 'Save Cost'}</Button></div>
+            <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setCostOpen(false)}>Cancel</Button><Button type="submit" className="bg-red-600 hover:bg-red-700" disabled={saving || missingAllocationDestination || !validAllocations || duplicateAllocations || draftReportingMonths.length === 0 || draftHasLockedMonth}>{saving ? 'Saving...' : 'Save Cost'}</Button></div>
           </form>
         </DialogContent>
       </Dialog>
