@@ -140,6 +140,7 @@ describe('Agency migration against real local PostgreSQL (PGlite)', () => {
   it('rejects all existing financial SECURITY DEFINER RPC entry points', async () => {
     const calls = [
       'get_profit_loss_data()', 'get_profit_loss_data_before_cost_months()',
+      "unlock_accounts_payment(NULL, '2026-08', NULL, '2468')",
       'set_profit_loss_revenue_month(NULL, current_date)',
       "save_profit_loss_category(NULL, 'Injected', true)",
       "save_profit_loss_cost(NULL, current_date, NULL, 'Injected', NULL, 1, NULL, '[]'::jsonb, ARRAY[current_date])",

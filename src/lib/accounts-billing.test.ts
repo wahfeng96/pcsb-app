@@ -30,6 +30,16 @@ describe('Accounts billable allocation', () => {
     expect(billableTotals([booking()], payments, profits)).toEqual({ total: 2000, completed: 2000, outstanding: 0 })
     expect(JSON.stringify(payments)).toBe(original)
   })
+  it('shows explicit PIN reopening as Invoice Sent without changing legacy Profit Sharing locks', () => {
+    const payment: AccountPayment = { id: 'p', booking_id: 'b', month: '2026-04', amount: 2000, status: 'invoice_sent', accounts_reopened_at: '2026-11-14T06:00:00Z' }
+    for (const status of ['waiting_profit_share', 'settled']) {
+      const profits = [{ booking_id: 'b', month: '2026-04', status }]
+      expect(effectivePaymentStatus('b', '2026-04', [payment], profits)).toBe('invoice_sent')
+      expect(billableTotals([booking()], [payment], profits)).toEqual({ total: 2000, completed: 0, outstanding: 2000 })
+      expect(effectivePaymentStatus('b', '2026-04', [{ ...payment, accounts_reopened_at: null }], profits)).toBe('completed')
+      expect(effectivePaymentStatus('b', '2026-04', [{ ...payment, status: 'completed' }], profits)).toBe('completed')
+    }
+  })
   it('zero-rate has no invented N and existing rounding/fallback is explicitly uncertain', () => {
     expect(keys(booking(0, '2026-04-21', 0))).toEqual([])
     expect(billingUncertainty(booking(0, '2026-04-21', 0))).toContain('unknown')

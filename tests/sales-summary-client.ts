@@ -2,6 +2,15 @@
 export function createClient() {
   return {
     rpc(name: string, args?: Record<string, unknown>) {
+      if (name === 'unlock_accounts_payment') {
+        const state = window as unknown as { salesFixture: Record<string, Array<Record<string, unknown>>>; accountsUnlockRequests?: number }
+        state.accountsUnlockRequests = (state.accountsUnlockRequests || 0) + 1
+        if (args?.p_pin !== '2468') return Promise.resolve({ data: { ok: false, error: 'Incorrect PIN.' }, error: null })
+        const row = state.salesFixture.monthly_payments.find(value => value.id === args?.p_payment_id && value.booking_id === args?.p_booking_id && value.month === args?.p_month)
+        if (!row || row.status !== 'completed') return Promise.resolve({ data: { ok: false, error: 'Entry changed.' }, error: null })
+        Object.assign(row, { status: 'invoice_sent', accounts_reopened_at: new Date().toISOString(), settled_at: null })
+        return Promise.resolve({ data: { ok: true }, error: null })
+      }
       if (name === 'set_other_expense_no_invoice') {
         const state = window as unknown as { otherEntries: Array<Record<string, unknown>>; otherError?: string; otherWrites: Array<Record<string, unknown>> }
         if (state.otherError) return Promise.resolve({ data: null, error: { message: state.otherError } })

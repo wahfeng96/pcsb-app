@@ -2,7 +2,7 @@ import { format, parseISO } from 'date-fns'
 import { getRevenueMonths } from './booking-utils'
 
 export type BillingBooking = { id: string; start_date: string; monthly_rate: number; total_amount: number; status?: string }
-export type AccountPayment = { id: string; booking_id: string; month: string; amount: number; status: 'pending_invoice' | 'invoice_sent' | 'completed'; invoice_number?: string }
+export type AccountPayment = { id: string; booking_id: string; month: string; amount: number; status: 'pending_invoice' | 'invoice_sent' | 'completed'; invoice_number?: string; accounts_reopened_at?: string | null }
 export type AccountProfit = { booking_id?: string; month: string; status: string }
 
 // Reuse Sales Summary inference verbatim; campaign end dates are occupancy only.
@@ -19,9 +19,11 @@ export function isBillableMonth(b: BillingBooking, month: string): boolean {
   return accountMonths(b).some(m => format(m, 'yyyy-MM') === month)
 }
 export function effectivePaymentStatus(id: string, month: string, payments: AccountPayment[], profits: AccountProfit[]): AccountPayment['status'] {
+  const payment = payments.find(p => p.booking_id === id && p.month === month)
+  if (payment?.accounts_reopened_at && payment.status !== 'completed') return payment.status
   const pr = profits.find(p => p.booking_id === id && p.month === month)
   if (pr?.status === 'waiting_profit_share' || pr?.status === 'settled') return 'completed'
-  return payments.find(p => p.booking_id === id && p.month === month)?.status || 'pending_invoice'
+  return payment?.status || 'pending_invoice'
 }
 export function normalizeInvoiceNumber(value: string | null | undefined): string {
   return String(value || '').trim().toLowerCase().replace(/^@+/, '').replace(/\s+/g, '')

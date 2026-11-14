@@ -39,6 +39,8 @@ for (const mobile of [false, true]) {
     if (mobile) {
       const locked = page.getByRole('button', { name: /Completed.*@VALID/ }).first()
       await locked.click()
+      await expect(page.getByRole('dialog')).toContainText('Unlock completed entry')
+      await page.getByRole('button', { name: 'Cancel', exact: true }).click()
       await expect(locked).toBeVisible()
     } else {
       await expect(page.getByRole('button', { name: /Completed/ })).toHaveCount(0)

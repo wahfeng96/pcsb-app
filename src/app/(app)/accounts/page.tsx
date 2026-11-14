@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Download, FileText, Lock, Plus, Pencil, Trash2, X, Check, DollarSign, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { AccountsUnlockDialog } from '@/components/accounts-unlock-dialog'
 import { format, startOfMonth, addMonths, subMonths, parseISO, isSameMonth } from 'date-fns'
 import { accountMonths, isBillableMonth, effectivePaymentStatus, billableTotals, csvCell, invoiceNumberMatches } from '@/lib/accounts-billing'
 import type { Billboard, Booking, Client } from '@/types/database'
@@ -14,7 +15,7 @@ import { useRole } from '@/lib/hooks/use-role'
 
 type BookingWithRefs = Booking & { client: Client; billboard: Billboard }
 type CostItem = { id: string; billboard_id: string; name: string; amount: number; start_month: string | null; end_month: string | null }
-type MonthlyPayment = { id: string; booking_id: string; month: string; amount: number; status: 'pending_invoice' | 'invoice_sent' | 'completed'; invoice_number?: string }
+type MonthlyPayment = { id: string; booking_id: string; month: string; amount: number; status: 'pending_invoice' | 'invoice_sent' | 'completed'; invoice_number?: string; accounts_reopened_at?: string | null }
 type ProfitShareRecord = { id: string; booking_id?: string; month: string; status: 'pending_payment' | 'waiting_profit_share' | 'settled' }
 
 const PAYMENT_CYCLE_STATUS: MonthlyPayment['status'][] = ['pending_invoice', 'invoice_sent', 'completed']
@@ -44,6 +45,7 @@ export default function AccountsPage() {
   const [monthlyPayments, setMonthlyPayments] = useState<MonthlyPayment[]>([])
   const [profitRecords, setProfitRecords] = useState<ProfitShareRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [unlockEntry, setUnlockEntry] = useState<{ bookingId: string; month: string; paymentId: string | null; label: string } | null>(null)
   const [viewMonth, setViewMonth] = useState(startOfMonth(new Date()))
   const [selectedBb, setSelectedBb] = useState<string>('all')
   const [invoiceFilter, setInvoiceFilter] = useState('')
@@ -105,24 +107,35 @@ export default function AccountsPage() {
     return months.length > 0 ? c.amount / months.length : 0
   }
 
-  // Check if profit sharing has been started (waiting or settled) for this booking/month
-  function isProfitShareTriggered(bookingId: string, monthKey: string): boolean {
-    const pr = profitRecords.find(r => r.booking_id === bookingId && r.month === monthKey)
-    return pr?.status === 'waiting_profit_share' || pr?.status === 'settled'
+  // Every completed entry requires the owner PIN, including legacy Profit Sharing locks.
+  function isPaymentLocked(bookingId: string, monthKey: string): boolean {
+    return getPaymentStatus(bookingId, monthKey) === 'completed'
   }
 
-  // Get payment status — auto "completed" if profit sharing is waiting/settled
+  async function unlockPayment(pin: string): Promise<{ ok: boolean; error?: string }> {
+    if (!canEdit || !unlockEntry) return { ok: false, error: 'Only the owner can unlock Accounts entries.' }
+    const { data, error } = await supabase.rpc('unlock_accounts_payment', { p_booking_id: unlockEntry.bookingId, p_month: unlockEntry.month, p_payment_id: unlockEntry.paymentId, p_pin: pin })
+    if (error) return { ok: false, error: error.message }
+    if (!data?.ok) return { ok: false, error: data?.error || 'Unable to unlock this entry.' }
+    await load()
+    return { ok: true }
+  }
+
+  // Keep legacy Profit Sharing completion unless this entry was explicitly reopened.
   function getPaymentStatus(bookingId: string, monthKey: string): MonthlyPayment['status'] {
     return effectivePaymentStatus(bookingId, monthKey, monthlyPayments, profitRecords)
   }
 
   async function cyclePaymentStatus(bookingId: string, monthKey: string, amount: number, invoiceNum?: string) {
     const booking = bookings.find(b => b.id === bookingId)
-    if (!canEdit || !booking || !isBillableMonth(booking, monthKey)) return
-    // If profit sharing already triggered, status is locked to completed
-    if (isProfitShareTriggered(bookingId, monthKey)) return
-
+    if (!canEdit || !booking) return
     const current = getPaymentStatus(bookingId, monthKey)
+    if (current === 'completed') {
+      const payment = monthlyPayments.find(p => p.booking_id === bookingId && p.month === monthKey)
+      setUnlockEntry({ bookingId, month: monthKey, paymentId: payment?.id || null, label: `${booking.brand_name || booking.client.company_name} · ${booking.billboard.name} · ${format(parseISO(`${monthKey}-01`), 'MMM yyyy')}${payment?.invoice_number ? ` · ${payment.invoice_number}` : ''}` })
+      return
+    }
+    if (!isBillableMonth(booking, monthKey)) return
     const currentIdx = PAYMENT_CYCLE_STATUS.indexOf(current)
     const next = PAYMENT_CYCLE_STATUS[(currentIdx + 1) % PAYMENT_CYCLE_STATUS.length]
 
@@ -175,13 +188,6 @@ export default function AccountsPage() {
           }
         }
       } catch { /* commissions table may not exist */ }
-    }
-    // When accounts cycles back from completed, revert profit sharing → pending_payment
-    if (current === 'completed' && next === 'pending_invoice') {
-      const pr = profitRecords.find(p => p.booking_id === bookingId && p.month === monthKey)
-      if (pr && pr.status === 'waiting_profit_share') {
-        await supabase.from('profit_sharing').update({ status: 'pending_payment' }).eq('id', pr.id)
-      }
     }
 
     load()
@@ -462,7 +468,7 @@ export default function AccountsPage() {
                 {invoiceResults.map(({ payment, booking }) => {
                   const status = getPaymentStatus(booking.id, payment.month)
                   const display = PAYMENT_STATUS_DISPLAY[status]
-                  const locked = isProfitShareTriggered(booking.id, payment.month)
+                  const locked = isPaymentLocked(booking.id, payment.month)
                   return (
                     <div key={payment.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
                       <div className="min-w-0 flex-1">
@@ -480,9 +486,9 @@ export default function AccountsPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className={`h-7 text-[10px] ${display.color} ${locked ? 'cursor-not-allowed opacity-70' : ''}`}
+                            className={`h-7 text-[10px] ${display.color} ${locked ? 'cursor-pointer' : ''}`}
                             onClick={() => cyclePaymentStatus(booking.id, payment.month, booking.monthly_rate || 0, payment.invoice_number)}
-                            title={locked ? 'Locked because Profit Sharing has started' : 'Change payment status'}
+                            title={locked ? 'Enter PIN to return to Invoice Sent' : 'Change payment status'}
                           >
                             {locked && <Lock className="mr-1 h-2.5 w-2.5" />}
                             {display.icon} {display.label}
@@ -500,6 +506,8 @@ export default function AccountsPage() {
         )}
       </div>
 
+      <AccountsUnlockDialog key={unlockEntry ? `${unlockEntry.bookingId}|${unlockEntry.month}` : 'closed'} entry={unlockEntry?.label || null} onClose={() => setUnlockEntry(null)} onUnlock={unlockPayment} />
+
       {/* Month navigation */}
       <div className="flex items-center justify-between bg-white rounded-lg border p-2">
         <Button aria-label="Previous month" size="icon" variant="ghost" onClick={() => setViewMonth(subMonths(viewMonth, 1))}><ChevronLeft className="h-4 w-4" /></Button>
@@ -515,7 +523,7 @@ export default function AccountsPage() {
         ))}
       </div>
 
-      <p className="text-xs text-gray-600">Normal rows use the full monthly rate for N consecutive months from the start month, matching Sales Summary total/rate inference, not campaign end dates. Completed includes existing Profit Sharing overrides; it is not independent proof of bank receipt.</p>
+      <p className="text-xs text-gray-600">Normal rows use the full monthly rate for N consecutive months from the start month, matching Sales Summary total/rate inference, not campaign end dates. Completed includes existing Profit Sharing overrides except entries explicitly reopened with the PIN; it is not independent proof of bank receipt.</p>
       {/* Grand Summary */}
       <Card>
         <CardContent className="p-4">
@@ -650,11 +658,11 @@ export default function AccountsPage() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className={`text-[10px] h-7 ${display.color} ${isProfitShareTriggered(b.id, monthKey) ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                className={`text-[10px] h-7 ${display.color} ${isPaymentLocked(b.id, monthKey) ? 'cursor-pointer' : ''}`}
                                 onClick={() => cyclePaymentStatus(b.id, monthKey, b.monthly_rate || 0)}
-                                title={isProfitShareTriggered(b.id, monthKey) ? 'Auto-completed by Profit Sharing' : ''}
+                                title={isPaymentLocked(b.id, monthKey) ? 'Enter PIN to return to Invoice Sent' : ''}
                               >
-                                {isProfitShareTriggered(b.id, monthKey) && <Lock className="h-2.5 w-2.5 mr-1" />}
+                                {isPaymentLocked(b.id, monthKey) && <Lock className="h-2.5 w-2.5 mr-1" />}
                                 {display.icon} {display.label}{(status === 'invoice_sent' || status === 'completed') && getInvoiceNumber(b.id, monthKey) ? ` · ${getInvoiceNumber(b.id, monthKey)}` : ''}
                               </Button>
                               {(status === 'invoice_sent' || status === 'completed') && (
@@ -730,11 +738,11 @@ export default function AccountsPage() {
                                       <Button
                                         size="sm"
                                         variant="outline"
-                                        className={`text-[9px] h-6 px-2 ${mDisplay.color} ${isProfitShareTriggered(b.id, mKey) ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                        className={`text-[9px] h-6 px-2 ${mDisplay.color} ${isPaymentLocked(b.id, mKey) ? 'cursor-pointer' : ''}`}
                                         onClick={() => cyclePaymentStatus(b.id, mKey, b.monthly_rate || 0)}
-                                        title={isProfitShareTriggered(b.id, mKey) ? 'Auto-completed by Profit Sharing' : ''}
+                                        title={isPaymentLocked(b.id, mKey) ? 'Enter PIN to return to Invoice Sent' : ''}
                                       >
-                                        {isProfitShareTriggered(b.id, mKey) && <Lock className="h-2.5 w-2.5 mr-1" />}
+                                        {isPaymentLocked(b.id, mKey) && <Lock className="h-2.5 w-2.5 mr-1" />}
                                         {mDisplay.icon} {mDisplay.label}{(mStatus === 'invoice_sent' || mStatus === 'completed') && getInvoiceNumber(b.id, mKey) ? ` · ${getInvoiceNumber(b.id, mKey)}` : ''}
                                       </Button>
                                       {(mStatus === 'invoice_sent' || mStatus === 'completed') && (
