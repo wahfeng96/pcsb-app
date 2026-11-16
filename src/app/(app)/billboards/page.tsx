@@ -59,7 +59,7 @@ export default function BillboardsPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [editingBb, setEditingBb] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ partner_id: '', profit_share_percent: 0 })
+  const [editForm, setEditForm] = useState({ name: '', partner_id: '', profit_share_percent: 0 })
   const [expandedBb, setExpandedBb] = useState<string | null>(null)
   const [newCost, setNewCost] = useState({ name: '', amount: 0, start_month: '', end_month: '' })
   const [viewMonth, setViewMonth] = useState(startOfMonth(new Date()))
@@ -112,10 +112,14 @@ export default function BillboardsPage() {
   }
 
   async function handleSaveEdit(bbId: string) {
-    await supabase.from('billboards').update({
+    const name = editForm.name.trim()
+    if (!name) return alert('Billboard name is required')
+    const { error } = await supabase.from('billboards').update({
+      name,
       partner_id: editForm.partner_id || null,
       profit_share_percent: editForm.profit_share_percent,
     }).eq('id', bbId)
+    if (error) return alert('Failed to save billboard: ' + error.message)
     setEditingBb(null)
     load()
   }
@@ -250,7 +254,7 @@ export default function BillboardsPage() {
                   </div>
                   <div className="flex items-center gap-1">
                     <Badge variant="secondary">{activeSlotsDisplay}/{maxSlots} slots</Badge>
-                    {canEdit && <Button size="icon" variant="ghost" onClick={() => { setEditingBb(isEditing ? null : bb.id); setEditForm({ partner_id: bb.partner_id || '', profit_share_percent: bb.profit_share_percent || 0 }) }}><Edit2 className="h-4 w-4" /></Button>}
+                    {canEdit && <Button size="icon" variant="ghost" onClick={() => { setEditingBb(isEditing ? null : bb.id); setEditForm({ name: bb.name, partner_id: bb.partner_id || '', profit_share_percent: bb.profit_share_percent || 0 }) }}><Edit2 className="h-4 w-4" /></Button>}
                     {canEdit && <Button size="icon" variant="ghost" className="text-red-600" onClick={() => handleDeleteBillboard(bb.id)}><Trash2 className="h-4 w-4" /></Button>}
                   </div>
                 </div>
@@ -259,6 +263,10 @@ export default function BillboardsPage() {
                 {isEditing && (
                   <Card className="mb-3 border-red-200">
                     <CardContent className="p-3 space-y-3">
+                      <div>
+                        <Label htmlFor={`billboard-name-${bb.id}`} className="text-xs">Billboard Name</Label>
+                        <Input id={`billboard-name-${bb.id}`} value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} required />
+                      </div>
                       <div>
                         <Label className="text-xs">Partner</Label>
                         <select className="w-full border rounded-md px-3 py-2 text-sm" value={editForm.partner_id} onChange={e => setEditForm(f => ({ ...f, partner_id: e.target.value }))}>
